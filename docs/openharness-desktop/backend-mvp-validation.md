@@ -22,6 +22,15 @@
 - 成功 `import openharness`
 - 当前已验证库可被 Host 进程直接加载
 
+### DeepSeek 环境变量映射
+- 检测系统环境变量：`DEEPSEEK_BASE_URL`、`DEEPSEEK_API_KEY`
+- 不直接读取或输出变量值到文档/日志
+- 在 Host 启动阶段映射为 OpenHarness 可识别的配置语义：
+  - `OPENHARNESS_API_FORMAT=openai`
+  - `OPENHARNESS_BASE_URL <- DEEPSEEK_BASE_URL`
+  - `OPENAI_API_KEY <- DEEPSEEK_API_KEY`
+- `/health` 中只展示“使用了哪些环境变量名”和映射状态，不暴露具体值
+
 ### 对前端友好的协议
 已实现：
 - `GET /health`
