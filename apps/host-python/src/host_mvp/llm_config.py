@@ -18,7 +18,7 @@ class LlmConfigView:
 def resolve_llm_config_from_env() -> LlmConfigView:
     deepseek_base = os.environ.get("DEEPSEEK_BASE_URL")
     deepseek_key = os.environ.get("DEEPSEEK_API_KEY")
-    model = os.environ.get("OPENHARNESS_MODEL") or os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL")
+    model = os.environ.get("OPENHARNESS_MODEL") or os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat"
 
     if deepseek_base and deepseek_key:
         return LlmConfigView(

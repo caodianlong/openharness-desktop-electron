@@ -29,6 +29,8 @@
   - `OPENHARNESS_API_FORMAT=openai`
   - `OPENHARNESS_BASE_URL <- DEEPSEEK_BASE_URL`
   - `OPENAI_API_KEY <- DEEPSEEK_API_KEY`
+  - 默认模型回退为 `deepseek-chat`
+  - `max_tokens` 在验证接口中收敛到 `4096` 以兼容 DeepSeek 限制
 - `/health` 中只展示“使用了哪些环境变量名”和映射状态，不暴露具体值
 
 ### 对前端友好的协议
@@ -49,8 +51,14 @@
 - protocol version endpoint
 - websocket bootstrap + ping
 
+## 当前进展
+当前已从“库导入 + Host 协议 + 基础测试”推进到“最小真实交互验证”阶段：
+- 新增 `/demo/run-tool-validation`
+- 通过 OpenHarness runtime 真实提交 prompt
+- 目标是触发 `bash`、`web_search`、`web_fetch` 三类工具调用
+
 ## 当前限制
-这个 MVP 只验证“库导入 + Host 协议 + 基础测试”三件事，还没有接入真正的 OpenHarness 会话执行/任务流。
+这一步仍属于验证接口，不是最终产品协议；后续还需要把 conversation/run/task/event 做正式 schema 化。
 
 ## 下一步建议
 1. 增加 `POST /conversations` 和 `POST /runs` 的假实现壳

@@ -1,0 +1,31 @@
+{
+  "api_key": "sk-e293eed5259942afb41e5c76140f9d3d",
+  "model": "deepseek-chat",
+  "max_tokens": 4096,
+  "base_url": "https://api.deepseek.com",
+  "api_format": "openai",
+  "system_prompt": null,
+  "permission": {
+    "mode": "full_auto",
+    "allowed_tools": [],
+    "denied_tools": [],
+    "path_rules": [],
+    "denied_commands": []
+  },
+  "hooks": {},
+  "memory": {
+    "enabled": true,
+    "max_files": 5,
+    "max_entrypoint_lines": 200
+  },
+  "enabled_plugins": {},
+  "mcp_servers": {},
+  "theme": "default",
+  "output_style": "default",
+  "vim_mode": false,
+  "voice_mode": false,
+  "fast_mode": false,
+  "effort": "medium",
+  "passes": 1,
+  "verbose": false
+}

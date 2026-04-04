@@ -7,6 +7,12 @@ from typing import Set
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from .adapter import OpenHarnessAdapter
+from .demo_runner import (
+    run_combined_tool_validation,
+    run_single_bash_validation,
+    run_single_web_fetch_validation,
+    run_single_web_search_validation,
+)
 
 app = FastAPI(title="OpenHarness Desktop Host MVP", version="0.1.0")
 adapter = OpenHarnessAdapter()
@@ -34,6 +40,26 @@ async def version():
 @app.get("/protocol/version")
 async def protocol_version():
     return {"protocol_version": "1", "transport": ["http", "websocket"]}
+
+
+@app.post("/demo/run-bash-pwd")
+async def demo_run_bash_pwd():
+    return await run_single_bash_validation()
+
+
+@app.post("/demo/run-web-search")
+async def demo_run_web_search():
+    return await run_single_web_search_validation()
+
+
+@app.post("/demo/run-web-fetch")
+async def demo_run_web_fetch():
+    return await run_single_web_fetch_validation()
+
+
+@app.post("/demo/run-combined-tools")
+async def demo_run_combined_tools():
+    return await run_combined_tool_validation()
 
 
 @app.websocket("/ws")

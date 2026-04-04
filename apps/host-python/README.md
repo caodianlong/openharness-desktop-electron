@@ -6,9 +6,12 @@
 - 使用环境变量把 DeepSeek（OpenAI-compatible）映射到 OpenHarness 配置语义
 - 暴露对前端友好的 HTTP / WebSocket 协议
 - 提供 `/health`、`/version`、`/protocol/version`、`/ws`
+- 提供 `/demo/run-bash-pwd` 做最小真实交互验证（单次 bash 工具调用）
 - 通过 pytest 做最小验证
 
 ## 本地运行
+
+## 运行验证接口
 
 ```bash
 cd apps/host-python
