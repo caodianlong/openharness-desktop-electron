@@ -67,6 +67,18 @@ CREATE TABLE IF NOT EXISTS approvals (
     decided_at    REAL,
     decision      TEXT DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    artifact_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    tool_name TEXT DEFAULT '',
+    artifact_type TEXT DEFAULT 'text',
+    content TEXT DEFAULT '',
+    file_path TEXT DEFAULT '',
+    created_at REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id, created_at DESC);
 """
 
 
@@ -190,6 +202,40 @@ class ApprovalRecord:
             "requested_at": self.requested_at,
             "decided_at": self.decided_at,
             "decision": self.decision,
+        }
+
+
+@dataclass
+class ArtifactRecord:
+    artifact_id: str
+    session_id: str
+    tool_name: str = ""
+    artifact_type: str = "text"
+    content: str = ""
+    file_path: str = ""
+    created_at: float = field(default_factory=time.time)
+
+    @classmethod
+    def from_row(cls, row: tuple) -> "ArtifactRecord":
+        return cls(
+            artifact_id=row[0],
+            session_id=row[1],
+            tool_name=row[2] or "",
+            artifact_type=row[3] or "text",
+            content=row[4] or "",
+            file_path=row[5] or "",
+            created_at=row[6],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "artifact_id": self.artifact_id,
+            "session_id": self.session_id,
+            "tool_name": self.tool_name,
+            "artifact_type": self.artifact_type,
+            "content": self.content,
+            "file_path": self.file_path,
+            "created_at": self.created_at,
         }
 
 
@@ -434,6 +480,59 @@ def list_approvals(session_id: str, status: str | None = None) -> list[ApprovalR
             (session_id,),
         ).fetchall()
     return [ApprovalRecord.from_row(row) for row in rows]
+
+
+def create_artifact(
+    session_id: str,
+    tool_name: str = "",
+    artifact_type: str = "text",
+    content: str = "",
+    file_path: str = "",
+) -> ArtifactRecord:
+    import uuid
+
+    record = ArtifactRecord(
+        artifact_id=uuid.uuid4().hex,
+        session_id=session_id,
+        tool_name=tool_name,
+        artifact_type=artifact_type or "text",
+        content=content or "",
+        file_path=file_path or "",
+        created_at=time.time(),
+    )
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO artifacts (artifact_id, session_id, tool_name, artifact_type, content, file_path, created_at) VALUES (?,?,?,?,?,?,?)",
+        (
+            record.artifact_id,
+            record.session_id,
+            record.tool_name,
+            record.artifact_type,
+            record.content,
+            record.file_path,
+            record.created_at,
+        ),
+    )
+    conn.commit()
+    return record
+
+
+def list_artifacts(session_id: str, limit: int = 50) -> list[ArtifactRecord]:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT artifact_id, session_id, tool_name, artifact_type, content, file_path, created_at FROM artifacts WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
+        (session_id, limit),
+    ).fetchall()
+    return [ArtifactRecord.from_row(row) for row in rows]
+
+
+def get_artifact(artifact_id: str) -> ArtifactRecord | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT artifact_id, session_id, tool_name, artifact_type, content, file_path, created_at FROM artifacts WHERE artifact_id=?",
+        (artifact_id,),
+    ).fetchone()
+    return ArtifactRecord.from_row(row) if row else None
 
 
 def fork_session(session_id: str) -> str | None:

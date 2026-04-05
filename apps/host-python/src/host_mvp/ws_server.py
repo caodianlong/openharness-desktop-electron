@@ -58,10 +58,13 @@ from fastapi.staticfiles import StaticFiles
 from . import session_store
 from .session_store import (
     ApprovalRecord,
+    create_artifact,
     create_session as db_create_session,
     create_approval as db_create_approval,
+    get_artifact as db_get_artifact,
     get_session as db_get_session,
     list_sessions as db_list_sessions,
+    list_artifacts as db_list_artifacts,
     list_approvals as db_list_approvals,
     save_message,
     get_messages as db_get_messages,
@@ -360,23 +363,32 @@ class AgentSession:
             })
 
         elif isinstance(event, ToolExecutionCompleted):
+            artifact_output = event.output if isinstance(event.output, str) else json.dumps(event.output, ensure_ascii=False, indent=2)
+
             # 工具结果 → SQLite
             save_message(MessageRecord(
                 session_id=self._db_session_id,
                 role="tool_result",
-                content=event.output,
+                content=artifact_output,
                 tool_name=event.tool_name,
-                tool_output=event.output,
+                tool_output=artifact_output,
                 is_error=event.is_error,
                 seq=self._msg_seq,
                 created_at=time.time(),
             ))
+            create_artifact(
+                session_id=self._db_session_id,
+                tool_name=event.tool_name,
+                artifact_type="error" if event.is_error else ("text" if isinstance(event.output, str) else "json"),
+                content=artifact_output,
+                file_path="",
+            )
             self._msg_seq += 1
             increment_message_count(self._db_session_id)
 
             await self._push("tool.completed", {
                 "tool_name": event.tool_name,
-                "output": event.output,
+                "output": artifact_output,
                 "is_error": event.is_error,
             })
 
@@ -615,6 +627,27 @@ async def get_session_approvals(session_id: str, status: str | None = "pending")
         "session_id": session_id,
         "approvals": [approval.to_dict() for approval in approvals],
     }
+
+
+@app.get("/api/sessions/{session_id}/artifacts")
+async def get_session_artifacts(session_id: str, limit: int = 50):
+    meta = db_get_session(session_id)
+    if not meta:
+        return {"error": "session not found"}, 404
+
+    artifacts = db_list_artifacts(session_id, limit=limit)
+    return {
+        "session_id": session_id,
+        "artifacts": [artifact.to_dict() for artifact in artifacts],
+    }
+
+
+@app.get("/api/artifacts/{artifact_id}")
+async def get_artifact_detail(artifact_id: str):
+    artifact = db_get_artifact(artifact_id)
+    if not artifact:
+        return {"error": "artifact not found"}, 404
+    return artifact.to_dict()
 
 
 # ═══════════════════════════════════════════════════════
