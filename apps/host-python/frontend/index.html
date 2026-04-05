@@ -276,19 +276,15 @@
     align-items: center;
     gap: 4px;
   }
-  .badge.connected {
-    background: transparent;
-    color: var(--text-dim);
-    border: none;
-    font-size: 11px;
-    font-weight: 400;
-    opacity: 0.7;
-  }
+  .badge.connected,
   .badge.disconnected {
     background: transparent;
     color: var(--text-dim);
     border: none;
-    opacity: 0.5;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.6;
   }
   .badge.permission {
     cursor: pointer;
@@ -296,7 +292,6 @@
     border: none;
     font-size: 11px;
     font-weight: 400;
-    opacity: 0.7;
   }
   .badge.permission-safe { color: var(--green); }
   .badge.permission-balanced { color: var(--amber); }
@@ -761,8 +756,8 @@
     <h1 id="topbarTitle">OpenHarness</h1>
     <div class="topbar-info">
       <span id="connBadge" class="badge disconnected"><span class="status-dot offline"></span>Offline</span>
+      <span style="color: var(--text-dim); opacity: 0.3; margin: 0 2px;">·</span>
       <span id="permissionBadge" class="badge permission permission-safe">Safe</span>
-    </div>
     </div>
   </header>
 
