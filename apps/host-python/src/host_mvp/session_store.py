@@ -305,7 +305,7 @@ def update_session(session_id: str, **fields: Any) -> SessionMeta | None:
     if not fields:
         return get_session(session_id)
 
-    allowed = {"title", "status", "cwd", "model", "snapshot_path"}
+    allowed = {"title", "status", "cwd", "model", "snapshot_path", "permission_mode"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_session(session_id)

@@ -258,7 +258,7 @@ class AgentSession:
         self._db_session_id: str = session_id
         self.permission_mode: str = "full_auto"
 
-    async def init_runtime(self, *, restore_messages: list[dict] | None = None, permission_mode: str = "full_auto"):
+    async def init_runtime(self, *, restore_messages: list[dict] | None = None, permission_mode: str | None = None):
         """初始化 OpenHarness 运行时，可选恢复历史消息和权限模式。"""
         runtime_settings = _read_runtime_settings()
         self.permission_mode = _normalize_permission_mode(permission_mode or runtime_settings["permission_mode"])
@@ -297,8 +297,19 @@ class AgentSession:
         if restore_messages:
             self._msg_seq = len(restore_messages)
 
-    async def handle_submit(self, text: str):
+    async def handle_submit(self, text: str, attachments: list[dict] = None):
         """处理用户消息."""
+        if attachments:
+            att_dir = Path.home() / ".openharness" / "attachments" / self.session_id
+            att_dir.mkdir(parents=True, exist_ok=True)
+            for att in attachments:
+                name = att.get("name", "unnamed")
+                b64 = att.get("base64", "")
+                if b64:
+                    file_path = att_dir / name
+                    file_path.write_bytes(base64.b64decode(b64))
+                    text += f"\n\n[附件文件: {file_path}]"
+
         if self.busy:
             await self._push("session.busy", {"message": "Session is busy"})
             return
@@ -507,6 +518,21 @@ class AgentSession:
 
         elif isinstance(event, ToolExecutionCompleted):
             artifact_output = event.output if isinstance(event.output, str) else json.dumps(event.output, ensure_ascii=False, indent=2)
+            artifact_type = "error" if event.is_error else ("text" if isinstance(event.output, str) else "json")
+
+            if not event.is_error and isinstance(event.output, str):
+                import re
+                match = re.search(r'(/[^ ]+\.(?:png|jpg|jpeg|svg|gif))', event.output, re.IGNORECASE)
+                if match:
+                    img_path = Path(match.group(1))
+                    if img_path.exists() and img_path.is_file():
+                        try:
+                            b64 = base64.b64encode(img_path.read_bytes()).decode("utf-8")
+                            mime, _ = mimetypes.guess_type(str(img_path))
+                            artifact_output = f"data:{mime or 'image/png'};base64,{b64}"
+                            artifact_type = "image"
+                        except Exception:
+                            pass
 
             # 工具结果 → SQLite
             save_message(MessageRecord(
@@ -522,7 +548,7 @@ class AgentSession:
             create_artifact(
                 session_id=self._db_session_id,
                 tool_name=event.tool_name,
-                artifact_type="error" if event.is_error else ("text" if isinstance(event.output, str) else "json"),
+                artifact_type=artifact_type,
                 content=artifact_output,
                 file_path="",
             )
@@ -567,6 +593,18 @@ class SessionManager:
     def create(cls) -> AgentSession:
         sid = uuid4().hex[:12]
         s = AgentSession(sid)
+        cls.sessions[sid] = s
+        return s
+
+    @classmethod
+    async def get_or_create(cls, sid: str) -> AgentSession:
+        s = cls.sessions.get(sid)
+        if s:
+            return s
+        meta = db_get_session(sid)
+        s = AgentSession(sid)
+        if meta and hasattr(meta, 'permission_mode') and meta.permission_mode:
+            s.permission_mode = _normalize_permission_mode(meta.permission_mode)
         cls.sessions[sid] = s
         return s
 
@@ -850,6 +888,44 @@ def _decode_data_url(content: str) -> tuple[str | None, bytes | None]:
         return None, None
 
 
+@app.get("/api/artifacts/{artifact_id}/download")
+async def download_artifact(artifact_id: str):
+    artifact = db_get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="artifact not found")
+
+    display_name = _artifact_display_name(artifact)
+    from urllib.parse import quote
+    encoded_name = quote(display_name)
+    headers = {
+        "X-Artifact-Name": display_name,
+        "X-Artifact-Type": artifact.artifact_type or "text",
+        "Content-Disposition": f"attachment; filename*=utf-8''{encoded_name}"
+    }
+
+    file_path = Path(artifact.file_path).expanduser() if artifact.file_path else None
+    if file_path and file_path.exists() and file_path.is_file():
+        mime, _ = mimetypes.guess_type(str(file_path))
+        mime = mime or "application/octet-stream"
+        return FileResponse(file_path, media_type=mime, filename=display_name, headers=headers)
+
+    content = artifact.content or ""
+    artifact_type = (artifact.artifact_type or "text").lower()
+
+    if artifact_type in {"image", "pdf"}:
+        mime, decoded = _decode_data_url(content)
+        if decoded is not None:
+            return Response(content=decoded, media_type=mime or ("image/png" if artifact_type == "image" else "application/pdf"), headers=headers)
+        try:
+            decoded = base64.b64decode(content, validate=True)
+            media_type = "image/png" if artifact_type == "image" else "application/pdf"
+            return Response(content=decoded, media_type=media_type, headers=headers)
+        except Exception:
+            if artifact_type == "pdf":
+                return PlainTextResponse(content, media_type="text/plain", headers=headers)
+
+    return PlainTextResponse(content, media_type="text/plain", headers=headers)
+
 @app.get("/api/artifacts/{artifact_id}/preview")
 async def preview_artifact(artifact_id: str):
     artifact = db_get_artifact(artifact_id)
@@ -913,17 +989,30 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
     await ws.accept()
     normal_shutdown = False
 
-    # 获取或创建会话
-    s = SessionManager.get(session_id)
-    if not s:
-        s = AgentSession(session_id)
-        SessionManager.sessions[session_id] = s
-
+    # 获取或创建会话（自动从数据库读取权限模式）
+    s = await SessionManager.get_or_create(session_id)
     s.ws = ws
 
     try:
         if not s.bundle:
-            await s.init_runtime()  # 默认不恢复历史消息
+            meta = db_get_session(session_id)
+            restore_messages = None
+            restore_perm = _normalize_permission_mode(s.permission_mode)
+            if meta:
+                messages = db_get_messages(session_id)
+                if messages:
+                    restore_messages = [
+                        {"role": m.role, "content": m.content}
+                        for m in messages if m.role in ("user", "assistant")
+                    ]
+                if hasattr(meta, 'permission_mode') and meta.permission_mode:
+                    restore_perm = _normalize_permission_mode(meta.permission_mode)
+
+            await s.init_runtime(
+                restore_messages=restore_messages,
+                permission_mode=restore_perm,
+            )
+            restore_perm = _normalize_permission_mode(s.permission_mode)
 
         ready_mode = _normalize_permission_mode(s.permission_mode)
         ready_model = getattr(s.bundle.engine, '_model', None) if s.bundle else _read_runtime_settings()["model"]
@@ -954,7 +1043,8 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
 
             elif t == "session.submit":
                 text = data.get("payload", {}).get("text", "")
-                await s.handle_submit(text)
+                attachments = data.get("payload", {}).get("attachments", [])
+                await s.handle_submit(text, attachments=attachments)
 
             elif t == "permission.response":
                 p = data.get("payload", {})

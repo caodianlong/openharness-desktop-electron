@@ -1036,24 +1036,37 @@ async function switchSession(id) {
   if (ws) ws.close();
   currentSessionId = id;
   sessionId = id;
-  await resumeSession(id);
+  // Reset the restore flag so fresh WebSocket connection renders nothing
+  window._backendRestored = false;
+  // Load session metadata from resume API for title and messages
+  const data = await api(`/sessions/${id}/resume`, { method: 'POST' });
+  const messages = data.messages || [];
+  $('#messages').innerHTML = '';
+  $('#welcomeArea')?.remove();
+  if (messages.length > 0) {
+    for (const m of messages) {
+      if (m.role === 'tool_result') {
+        createToolCard(m.tool_name || 'Tool', m.tool_input || '');
+        updateToolCard(m.tool_output || m.content, !!m.is_error);
+      } else if (m.role === 'assistant') {
+        addMsgToUI('assistant', m.content, m);
+      } else if (m.role === 'system') {
+        addMsgToUI('system', m.content, m);
+      } else {
+        addMsgToUI(m.role, m.content, m);
+      }
+    }
+    window._backendRestored = 'restored';
+    scrollBottom();
+  } else {
+    renderWelcome();
+  }
+  $('#topbarTitle').textContent = data.session.title || 'New Session';
+  updatePermissionBadge(data.session.permission_mode || 'safe');
   connect();
   loadSessions();
   loadArtifacts(id);
   loadApprovals(id);
-}
-
-async function resumeSession(id) {
-  const data = await api(`/sessions/${id}/resume`, { method: 'POST' });
-  const messages = data.messages || [];
-  $('#messages').innerHTML = '';
-  if (messages.length > 0) {
-    messages.forEach(m => addMsgToUI(m.role, m.content, m));
-    $('#welcomeArea')?.remove();
-  }
-  $('#topbarTitle').textContent = data.session.title || 'New Session';
-  updatePermissionBadge(data.session.permission_mode || 'safe');
-  if (messages.length === 0) renderWelcome();
 }
 
 function renderWelcome() {
@@ -1091,6 +1104,7 @@ async function deleteSession(id) {
 // ═══════════════════════════════════════════════════════
 function connect() {
   if (ws) ws.close();
+  window._backendRestored = 'restoring';
   ws = new WebSocket(`${WS_BASE}/ws/${sessionId}`);
   ws.onopen = () => {
     $('#connBadge').className = 'badge connected';
@@ -1132,9 +1146,19 @@ function handleWsEvent(data) {
       loadSessions();
       break;
     case 'transcript.item':
-      if (payload.role !== 'user' || payload.text !== window._lastSubmitted) {
-        addMsgToUI(payload.role, payload.text);
+      // During session resume, backend echoes user messages via transcript.item;
+      // skip those to avoid duplicates (resumeSession() already rendered them).
+      if (payload.role === 'user' && window._backendRestored === 'restoring') {
+        return;
       }
+      if (payload.role === 'user' && window._backendRestored === 'restored') {
+        window._backendRestored = true;
+      }
+      // Avoid re-rendering the user message we just sent (addMsgToUI already showed it locally)
+      if (payload.role === 'user' && payload.text.startsWith(window._lastSubmitted)) {
+        return;
+      }
+      addMsgToUI(payload.role, payload.text);
       break;
     case 'error':
       addMsgToUI('system', 'Error: ' + payload.message);
@@ -1258,12 +1282,19 @@ function renderArtifactList() {
     list.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:40px 0;font-size:13px;">No artifacts.</div>';
     return;
   }
-  list.innerHTML = artifacts.map(a => `
-    <div class="artifact-item-card" onclick="showArtifactPreview('${a.artifact_id}')">
-      <div style="font-size:13px;font-weight:600;">${esc(a.file_path || a.tool_name)}</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${a.artifact_type} · ${new Date(a.created_at * 1000).toLocaleTimeString()}</div>
-    </div>
-  `).join('');
+  list.innerHTML = artifacts.map(a => {
+    const previewBtn = `<button class="action-btn" title="Preview" style="font-size:14px;">👁</button>`;
+    const dlLink = `<a class="action-btn" href="/api/artifacts/${a.artifact_id}/download" title="Download" style="text-decoration:none;font-size:14px;">💾</a>`;
+    return `<div class="artifact-item-card" data-aid="${a.artifact_id}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+        <div style="flex:1;cursor:pointer;" onclick="showArtifactPreview('${a.artifact_id}')">
+          <div style="font-size:13px;font-weight:600;">${esc(a.file_path || a.tool_name)}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${a.artifact_type} · ${new Date(a.created_at * 1000).toLocaleTimeString()}</div>
+        </div>
+        <div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0;">${previewBtn}${dlLink}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function showArtifactPreview(id) {
@@ -1272,13 +1303,23 @@ async function showArtifactPreview(id) {
   try {
     const res = await fetch(`${API_BASE}/api/artifacts/${id}/preview`);
     const contentType = res.headers.get('content-type');
-    if (contentType.includes('image')) {
+    if (contentType && contentType.includes('image')) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       $('#previewContent').innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px;" />`;
     } else {
       const text = await res.text();
-      $('#previewContent').innerHTML = `<pre style="font-size:12px; overflow-x:auto;">${esc(text)}</pre>`;
+      const lowerText = text.trim().toLowerCase();
+      const isHtml = (contentType && contentType.includes('html')) || lowerText.startsWith('<html') || lowerText.startsWith('<!doctype');
+      if (isHtml) {
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'width:100%; height:400px; border:none; background:#fff; border-radius:8px;';
+        iframe.srcdoc = text;
+        $('#previewContent').innerHTML = '';
+        $('#previewContent').appendChild(iframe);
+      } else {
+        $('#previewContent').innerHTML = `<pre style="font-size:12px; overflow-x:auto;">${esc(text)}</pre>`;
+      }
     }
   } catch (e) { $('#previewContent').textContent = 'Error loading preview.'; }
 }
@@ -1298,23 +1339,22 @@ function sendMsg() {
   if (!text && pendingAttachments.length === 0) return;
   if (busy) return;
 
-  // Combine text with attachments
-  let fullText = text;
+  // Send attachments with base64 so backend can save them to disk
+  let attachments = [];
   if (pendingAttachments.length > 0) {
-    pendingAttachments.forEach(a => {
-      fullText += `\n\n[File: ${a.name}]\n${a.base64}`;
-    });
+    attachments = pendingAttachments.map(a => ({ name: a.name, base64: a.base64 }));
   }
 
-  window._lastSubmitted = text;
+  const fullText = text;
+  window._lastSubmitted = fullText;
   addMsgToUI('user', text || `Uploaded ${pendingAttachments.length} files`);
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'session.submit', payload: { text: fullText } }));
+    ws.send(JSON.stringify({ type: 'session.submit', payload: { text: fullText, attachments } }));
   }
   input.value = '';
   input.style.height = 'auto';
   pendingAttachments = [];
-  if (typeof renderAttachments === 'function') renderAttachments();
+  renderAttachments();
   setBusy(true);
 }
 
@@ -1473,7 +1513,7 @@ $('#permissionBadge').onclick = async () => {
 async function exportToMarkdown() {
   if (!currentSessionId) return;
   try {
-    const data = await api(`/sessions/${currentSessionId}/resume`, { method: 'POST' });
+    const data = await api(`/sessions/${currentSessionId}`);
     let md = `# ${data.session.title || 'Session'}\n\n`;
     for (const m of (data.messages || [])) {
       const roleLabel = m.role === 'user' ? '👤 User' : '🤖 Assistant';
@@ -1501,7 +1541,7 @@ const _wrappedSendMsg = () => {
   }
   if (text === '/clear') {
     $('#messages').innerHTML = '';
-    $('#welcomeArea').classList.remove('hidden');
+    renderWelcome();
     $('#msgInput').value = '';
     return;
   }
@@ -1541,12 +1581,9 @@ async function checkRecovery() {
 }
 
 // --- Drag and Drop ---
-const dropZone = document.body;
-dropZone.ondragover = e => { e.preventDefault(); $('#inputContainer')?.classList.add('drag-over'); };
-dropZone.ondragleave = () => $('#inputContainer')?.classList.remove('drag-over');
+dropZone.ondragover = e => { e.preventDefault(); };
+dropZone.ondragleave = () => { /* no-op */ };
 dropZone.ondrop = async e => {
-  e.preventDefault();
-  $('#inputContainer')?.classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
   if (files.length) {
     for (const file of files) {
@@ -1563,7 +1600,7 @@ dropZone.ondrop = async e => {
 };
 
 function renderAttachments() {
-  const row = $('#attachmentsRow');
+  const row = $('#composerAttachments');
   if (!row) return;
   if (pendingAttachments.length === 0) {
     row.classList.add('hidden');
