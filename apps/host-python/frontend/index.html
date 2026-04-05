@@ -1046,11 +1046,37 @@ async function switchSession(id) {
 async function resumeSession(id) {
   const data = await api(`/sessions/${id}/resume`, { method: 'POST' });
   $('#messages').innerHTML = '';
-  if (data.messages) {
+  if (data.messages && data.messages.length > 0) {
     data.messages.forEach(m => addMsgToUI(m.role, m.content, m));
+    $('#welcomeArea').classList.add('hidden');
+  } else {
+    renderWelcome();
   }
   $('#topbarTitle').textContent = data.session.title || 'New Session';
   updatePermissionBadge(data.session.permission_mode || 'safe');
+}
+
+function renderWelcome() {
+  $('#welcomeArea')?.remove();
+  const welcome = document.createElement('div');
+  welcome.id = 'welcomeArea';
+  welcome.className = 'welcome-screen';
+  welcome.innerHTML = `
+    <div class="welcome-logo">🛠️</div>
+    <div class="welcome-title">Welcome to OpenHarness</div>
+    <div class="welcome-subtitle">Your AI agent for universal office tasks. How can I help you today?</div>
+    <div class="welcome-actions">
+      <div class="quick-action" onclick="applyQuickAction('Help me organize my files')">
+        <div class="quick-action-title">Organize Files</div>
+        <div class="quick-action-desc">Scan and categorize current workspace.</div>
+      </div>
+      <div class="quick-action" onclick="applyQuickAction('Analyze this project')">
+        <div class="quick-action-title">Analyze Project</div>
+        <div class="quick-action-desc">Get a high-level overview.</div>
+      </div>
+    </div>
+  `;
+  $('#messages').appendChild(welcome);
 }
 
 async function deleteSession(id) {
