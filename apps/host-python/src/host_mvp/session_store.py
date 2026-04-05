@@ -91,6 +91,7 @@ class SessionMeta:
     status: str = "active"
     cwd: str = ""
     model: str = ""
+    permission_mode: str = "full_auto"  # safe/balanced/full_auto
     message_count: int = 0
     usage_input: int = 0
     usage_output: int = 0
@@ -100,18 +101,20 @@ class SessionMeta:
 
     @classmethod
     def from_row(cls, row: tuple) -> "SessionMeta":
+        # Map by column name for safe ALTER TABLE compatibility
         return cls(
             session_id=row[0],
             title=row[1],
             status=row[2],
             cwd=row[3],
             model=row[4],
-            message_count=row[5],
-            usage_input=row[6],
-            usage_output=row[7],
-            snapshot_path=row[8],
-            created_at=row[9],
-            updated_at=row[10],
+            permission_mode=row[11] if len(row) > 11 else (row[5] if len(row) > 5 and isinstance(row[5], str) else "full_auto"),
+            message_count=row[5] if len(row) > 5 and isinstance(row[5], int) else (row[6] if len(row) > 6 else 0),
+            usage_input=row[6] if len(row) > 6 and isinstance(row[6], int) else (row[7] if len(row) > 7 else 0),
+            usage_output=row[7] if len(row) > 7 and isinstance(row[7], int) else (row[8] if len(row) > 8 else 0),
+            snapshot_path=row[8] if len(row) > 8 else (row[9] if len(row) > 9 else ""),
+            created_at=row[9] if len(row) > 9 else (row[10] if len(row) > 10 else 0.0),
+            updated_at=row[10] if len(row) > 10 else (row[11] if len(row) > 11 else 0.0),
         )
 
 

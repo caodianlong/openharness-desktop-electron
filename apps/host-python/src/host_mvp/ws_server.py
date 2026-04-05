@@ -110,9 +110,11 @@ class AgentSession:
 
         # SQLite 持久化 ID（可以与 session_id 相同或不同）
         self._db_session_id: str = session_id
+        self.permission_mode: str = "full_auto"
 
-    async def init_runtime(self, *, restore_messages: list[dict] | None = None):
-        """初始化 OpenHarness 运行时，可选恢复历史消息。"""
+    async def init_runtime(self, *, restore_messages: list[dict] | None = None, permission_mode: str = "full_auto"):
+        """初始化 OpenHarness 运行时，可选恢复历史消息和权限模式。"""
+        self.permission_mode = permission_mode
         _apply_env_aliases()
 
         # 确保 SQLite 会话记录存在
@@ -125,12 +127,14 @@ class AgentSession:
             )
 
         model = meta.model if meta else (os.environ.get("OPENHARNESS_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat")
+        perm = getattr(meta, 'permission_mode', None) or self.permission_mode
 
         settings = load_settings()
         settings.api_format = "openai"
         settings.model = model
         settings.max_tokens = 4096
-        settings.permission.mode = PermissionMode.FULL_AUTO
+        mode_map = {"safe": PermissionMode.DEFAULT, "balanced": PermissionMode.DEFAULT, "full_auto": PermissionMode.FULL_AUTO}
+        settings.permission.mode = mode_map.get(perm, PermissionMode.FULL_AUTO)
         save_settings(settings)
 
         self.bundle = await build_runtime(
@@ -220,6 +224,18 @@ class AgentSession:
 
         finally:
             self.busy = False
+
+    async def set_permission_mode(self, mode: str):
+        """动态切换权限模式（当前会话）。"""
+        valid = {"safe", "balanced", "full_auto"}
+        if mode not in valid:
+            return {"ok": False, "error": "mode must be one of safe/balanced/full_auto"}
+        self.permission_mode = mode
+        mode_map = {"safe": PermissionMode.DEFAULT, "balanced": PermissionMode.DEFAULT, "full_auto": PermissionMode.FULL_AUTO}
+        settings = load_settings()
+        settings.permission.mode = mode_map[mode]
+        save_settings(settings)
+        return {"ok": True, "mode": mode}
 
     async def handle_permission_response(self, request_id: str, allowed: bool):
         fut = self._permission_futures.pop(request_id, None)
@@ -435,6 +451,7 @@ async def list_sessions_db(limit: int = 50):
                 "title": s.title,
                 "status": s.status,
                 "model": s.model,
+                "permission_mode": getattr(s, 'permission_mode', 'full_auto') or 'full_auto',
                 "message_count": s.message_count,
                 "created_at": s.created_at,
                 "updated_at": s.updated_at,
@@ -547,6 +564,24 @@ async def update_session_title(session_id: str, body: dict):
     if not meta:
         return {"error": "session not found"}, 404
     return {"ok": True, "title": title}
+
+
+@app.put("/api/sessions/{session_id}/permission")
+async def update_permission_mode(session_id: str, body: dict):
+    """切换会话权限模式（safe/balanced/full_auto）。"""
+    mode = body.get("mode", "")
+    if not mode:
+        return {"error": "mode is required"}, 400
+    s = SessionManager.get(session_id)
+    if s:
+        result = await s.set_permission_mode(mode)
+        if result.get("ok"):
+            db_update_session(session_id, permission_mode=mode)
+            return result
+        return {"error": result.get("error")}, 400
+    # Session not in memory, just update DB
+    db_update_session(session_id, permission_mode=mode)
+    return {"ok": True, "mode": mode}
 
 
 # ═══════════════════════════════════════════════════════

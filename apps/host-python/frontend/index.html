@@ -226,6 +226,59 @@
   }
   .badge.connected { background: var(--green-dim); color: var(--green); }
   .badge.disconnected { background: var(--red-dim); color: var(--red); }
+  .badge.permission-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .badge.permission-mode:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+  }
+  .badge.permission-safe { background: var(--green-dim); color: var(--green); }
+  .badge.permission-balanced { background: var(--amber-dim); color: var(--amber); }
+  .badge.permission-full_auto { background: var(--red-dim); color: var(--red); }
+  .permission-menu {
+    position: fixed;
+    min-width: 180px;
+    padding: 6px;
+    background: rgba(20, 24, 34, 0.9);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.38);
+    z-index: 120;
+  }
+  .permission-menu.hidden { display: none !important; }
+  .permission-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .permission-option:hover {
+    background: rgba(124,106,255,.18);
+  }
+  .permission-option.active {
+    background: rgba(124,106,255,.24);
+    color: #fff;
+  }
+  .permission-option small {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
 
   /* ── Messages ── */
   .messages {
@@ -771,6 +824,25 @@ let sessions = [];
 let slashMatches = [];
 let slashSelectedIndex = 0;
 let pendingUserEcho = null;
+let currentPermissionMode = 'safe';
+
+const PERMISSION_MODE_META = {
+  safe: { label: '🔒 Safe', className: 'permission-safe', status: '安全模式' },
+  balanced: { label: '⚖️ Balanced', className: 'permission-balanced', status: '平衡模式' },
+  full_auto: { label: '🚀 Full Auto', className: 'permission-full_auto', status: '全自动模式' },
+};
+
+const permissionBadge = document.createElement('span');
+permissionBadge.id = 'permissionBadge';
+permissionBadge.className = 'badge permission-mode permission-safe';
+permissionBadge.textContent = PERMISSION_MODE_META.safe.label;
+permissionBadge.title = '点击切换权限模式';
+connBadge.insertAdjacentElement('afterend', permissionBadge);
+
+const permissionMenu = document.createElement('div');
+permissionMenu.id = 'permissionMenu';
+permissionMenu.className = 'permission-menu hidden';
+document.body.appendChild(permissionMenu);
 
 function getSlashQuery(text) {
   const trimmed = text.trimStart();
@@ -840,6 +912,63 @@ function renderSlashPopup() {
 function hideWelcome() {
   if (welcomeArea && !welcomeArea.classList.contains('hidden')) {
     welcomeArea.classList.add('hidden');
+  }
+}
+
+function getPermissionModeMeta(mode) {
+  return PERMISSION_MODE_META[mode] || PERMISSION_MODE_META.safe;
+}
+
+function renderPermissionMenu() {
+  permissionMenu.innerHTML = Object.entries(PERMISSION_MODE_META).map(([mode, meta]) => `
+    <button class="permission-option ${mode === currentPermissionMode ? 'active' : ''}" data-mode="${mode}">
+      <span>${esc(meta.label)}</span>
+      <small>${esc(meta.status)}</small>
+    </button>
+  `).join('');
+}
+
+function setPermissionModeUI(mode) {
+  const nextMode = PERMISSION_MODE_META[mode] ? mode : 'safe';
+  currentPermissionMode = nextMode;
+  const meta = getPermissionModeMeta(nextMode);
+  permissionBadge.className = `badge permission-mode ${meta.className}`;
+  permissionBadge.textContent = meta.label;
+  permissionBadge.dataset.mode = nextMode;
+  renderPermissionMenu();
+}
+
+function hidePermissionMenu() {
+  permissionMenu.classList.add('hidden');
+}
+
+function showPermissionMenu() {
+  renderPermissionMenu();
+  const rect = permissionBadge.getBoundingClientRect();
+  permissionMenu.style.top = `${rect.bottom + 8}px`;
+  permissionMenu.style.left = `${Math.max(12, rect.right - 180)}px`;
+  permissionMenu.classList.remove('hidden');
+}
+
+async function updatePermissionMode(mode) {
+  if (!currentSessionId || mode === currentPermissionMode) {
+    hidePermissionMenu();
+    return;
+  }
+
+  const prevMode = currentPermissionMode;
+  setPermissionModeUI(mode);
+  try {
+    await api(`/sessions/${currentSessionId}/permission`, {
+      method: 'PUT',
+      body: JSON.stringify({ mode }),
+    });
+    statusText.textContent = `已连接 · ${getPermissionModeMeta(mode).status}`;
+    hidePermissionMenu();
+  } catch (e) {
+    setPermissionModeUI(prevMode);
+    addMsg('error', '权限模式切换失败: ' + e.message);
+    hidePermissionMenu();
   }
 }
 
@@ -1023,7 +1152,7 @@ async function createNewSession() {
   try {
     const data = await api('/sessions', {
       method: 'POST',
-      body: JSON.stringify({ title: '' }),
+      body: JSON.stringify({ title: '', permission_mode: 'safe' }),
     });
     await switchSession(data.session_id);
   } catch (e) {
@@ -1142,7 +1271,7 @@ function connect() {
   ws.onopen = () => {
     connBadge.className = 'badge connected';
     connBadge.textContent = '● 已连接';
-    statusText.textContent = '已连接 · 准备就绪';
+    statusText.textContent = `已连接 · ${getPermissionModeMeta(currentPermissionMode).status}`;
     setBusy(false);
     msgInput.disabled = false;
     sendBtn.disabled = false;
@@ -1165,7 +1294,9 @@ function connect() {
   ws.onclose = () => {
     connBadge.className = 'badge disconnected';
     connBadge.textContent = '● 未连接';
+    statusText.textContent = '连接已断开';
     setBusy(false);
+    hidePermissionMenu();
   };
 }
 
@@ -1183,7 +1314,11 @@ function handleEvent(data) {
 
   switch (type) {
     case 'session.ready':
+      if (payload.mode) {
+        setPermissionModeUI(payload.mode);
+      }
       setBusy(false);
+      statusText.textContent = `已连接 · ${getPermissionModeMeta(currentPermissionMode).status}`;
       msgInput.focus();
       break;
 
@@ -1412,6 +1547,21 @@ document.addEventListener('click', (e) => {
   if (e.target !== msgInput && !slashPopup.contains(e.target)) {
     hideSlashPopup();
   }
+
+  if (e.target === permissionBadge) {
+    permissionMenu.classList.contains('hidden') ? showPermissionMenu() : hidePermissionMenu();
+    return;
+  }
+
+  if (!permissionMenu.contains(e.target)) {
+    hidePermissionMenu();
+  }
+});
+
+permissionMenu.addEventListener('click', (e) => {
+  const option = e.target.closest('.permission-option');
+  if (!option) return;
+  updatePermissionMode(option.dataset.mode);
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1442,6 +1592,7 @@ async function init() {
   }
 }
 
+setPermissionModeUI(currentPermissionMode);
 init();
 </script>
 </body>
