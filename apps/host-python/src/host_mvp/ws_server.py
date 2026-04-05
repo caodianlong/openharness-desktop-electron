@@ -51,7 +51,7 @@ from uuid import uuid4
 
 # ─── 3rd party ──────────────────────────────────────────
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 # ─── 内部模块 ───────────────────────────────────────────
@@ -93,9 +93,89 @@ from openharness.config.settings import load_settings, save_settings
 # ───────────────────────────────────────────────────────
 app = FastAPI(title="OpenHarness Desktop Host", version="0.3.0")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+LOG_FILE_PATH = Path("/tmp/backend.log")
+RUNTIME_PERMISSION_MODE = "safe"
 
 # 静态文件目录（预留给未来拆分 CSS/JS 资源）
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+
+def _normalize_permission_mode(mode: str | None) -> str:
+    normalized = (mode or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "default": "safe",
+        "plan": "balanced",
+        "full": "full_auto",
+        "fullauto": "full_auto",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"safe", "balanced", "full_auto"}:
+        return "safe"
+    return normalized
+
+
+def _current_model() -> str:
+    settings = load_settings()
+    return (
+        getattr(settings, "model", None)
+        or os.environ.get("OPENHARNESS_MODEL")
+        or os.environ.get("DEEPSEEK_MODEL")
+        or "deepseek-chat"
+    )
+
+
+def _current_permission_mode() -> str:
+    return _normalize_permission_mode(RUNTIME_PERMISSION_MODE)
+
+
+def _read_runtime_settings() -> dict[str, Any]:
+    return {
+        "model": _current_model(),
+        "permission_mode": _current_permission_mode(),
+        "cwd": os.getcwd(),
+        "logs_url": "/api/logs",
+    }
+
+
+def _apply_runtime_settings(*, model: str | None = None, permission_mode: str | None = None, cwd: str | None = None) -> dict[str, Any]:
+    global RUNTIME_PERMISSION_MODE
+    settings = load_settings()
+
+    if model is not None:
+        settings.model = model.strip() or _current_model()
+
+    normalized_mode = None
+    if permission_mode is not None:
+        normalized_mode = _normalize_permission_mode(permission_mode)
+        RUNTIME_PERMISSION_MODE = normalized_mode
+        settings.permission.mode = PermissionMode.FULL_AUTO if normalized_mode == "full_auto" else PermissionMode.DEFAULT
+
+    if cwd is not None:
+        target = Path(cwd).expanduser().resolve()
+        if not target.exists() or not target.is_dir():
+            raise HTTPException(status_code=400, detail="cwd must be an existing directory")
+        os.chdir(target)
+
+    save_settings(settings)
+    return {
+        "model": getattr(settings, "model", None) or _current_model(),
+        "permission_mode": normalized_mode or _current_permission_mode(),
+        "cwd": os.getcwd(),
+        "logs_url": "/api/logs",
+    }
+
+
+def _tail_log_lines(path: Path, limit: int = 500) -> str:
+    if not path.exists():
+        return "backend.log not found\n"
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"failed to read log file: {exc}") from exc
+    return "".join(lines[-limit:])
+_initial_permission_mode = getattr(getattr(load_settings(), "permission", None), "mode", None)
+RUNTIME_PERMISSION_MODE = "full_auto" if _initial_permission_mode == PermissionMode.FULL_AUTO else "safe"
 
 
 # ═══════════════════════════════════════════════════════
@@ -121,7 +201,8 @@ class AgentSession:
 
     async def init_runtime(self, *, restore_messages: list[dict] | None = None, permission_mode: str = "full_auto"):
         """初始化 OpenHarness 运行时，可选恢复历史消息和权限模式。"""
-        self.permission_mode = permission_mode
+        runtime_settings = _read_runtime_settings()
+        self.permission_mode = _normalize_permission_mode(permission_mode or runtime_settings["permission_mode"])
         _apply_env_aliases()
 
         # 确保 SQLite 会话记录存在
@@ -130,11 +211,11 @@ class AgentSession:
             db_create_session(
                 self._db_session_id,
                 cwd=os.getcwd(),
-                model=os.environ.get("OPENHARNESS_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat",
+                model=runtime_settings["model"],
             )
 
-        model = meta.model if meta else (os.environ.get("OPENHARNESS_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat")
-        perm = getattr(meta, 'permission_mode', None) or self.permission_mode
+        model = (meta.model if meta and meta.model else runtime_settings["model"])
+        perm = _normalize_permission_mode(getattr(meta, 'permission_mode', None) or self.permission_mode)
 
         settings = load_settings()
         settings.api_format = "openai"
@@ -234,15 +315,17 @@ class AgentSession:
 
     async def set_permission_mode(self, mode: str):
         """动态切换权限模式（当前会话）。"""
+        global RUNTIME_PERMISSION_MODE
         valid = {"safe", "balanced", "full_auto"}
         if mode not in valid:
             return {"ok": False, "error": "mode must be one of safe/balanced/full_auto"}
-        self.permission_mode = mode
+        self.permission_mode = _normalize_permission_mode(mode)
+        RUNTIME_PERMISSION_MODE = self.permission_mode
         mode_map = {"safe": PermissionMode.DEFAULT, "balanced": PermissionMode.DEFAULT, "full_auto": PermissionMode.FULL_AUTO}
         settings = load_settings()
-        settings.permission.mode = mode_map[mode]
+        settings.permission.mode = mode_map[self.permission_mode]
         save_settings(settings)
-        return {"ok": True, "mode": mode}
+        return {"ok": True, "mode": self.permission_mode}
 
     async def handle_permission_response(self, request_id: str, allowed: bool):
         db_update_approval_status(
@@ -452,6 +535,26 @@ async def health():
     }
 
 
+@app.get("/api/settings")
+async def get_settings():
+    return _read_runtime_settings()
+
+
+@app.put("/api/settings")
+async def update_settings(body: dict = {}):
+    updated = _apply_runtime_settings(
+        model=body.get("model"),
+        permission_mode=body.get("permission_mode"),
+        cwd=body.get("cwd"),
+    )
+    return {"ok": True, **updated}
+
+
+@app.get("/api/logs", response_class=PlainTextResponse)
+async def get_logs():
+    return PlainTextResponse(_tail_log_lines(LOG_FILE_PATH, limit=500))
+
+
 # ═══════════════════════════════════════════════════════
 # REST API — 会话管理
 # ═══════════════════════════════════════════════════════
@@ -459,11 +562,12 @@ async def health():
 @app.post("/api/sessions")
 async def create_session(body: dict = {}):
     """创建新会话（同时创建 SQLite 记录）。"""
+    runtime_settings = _read_runtime_settings()
     sid = uuid4().hex[:12]
     db_create_session(
         sid,
-        cwd=body.get("cwd", os.getcwd()),
-        model=body.get("model") or os.environ.get("OPENHARNESS_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat",
+        cwd=body.get("cwd", runtime_settings["cwd"]),
+        model=body.get("model") or runtime_settings["model"],
         title=body.get("title", ""),
     )
     return {
@@ -670,12 +774,15 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
         if not s.bundle:
             await s.init_runtime()  # 默认不恢复历史消息
 
+        ready_mode = _normalize_permission_mode(s.permission_mode)
+        ready_model = getattr(s.bundle.engine, '_model', None) if s.bundle else _read_runtime_settings()["model"]
+
         await ws.send_json({
             "type": "session.ready",
             "session_id": s.session_id,
             "payload": {
-                "model": getattr(s.bundle.engine, '_model', None) if s.bundle else None,
-                "mode": "full_auto",
+                "model": ready_model,
+                "mode": ready_mode,
             },
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
