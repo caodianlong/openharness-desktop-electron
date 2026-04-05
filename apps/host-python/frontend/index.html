@@ -631,12 +631,89 @@
     background: var(--surface);
     flex-shrink: 0;
   }
+  .composer-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .composer-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .composer-attachments.hidden {
+    display: none !important;
+  }
+  .attachment-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 200px;
+    max-width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #171b24;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .attachment-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(124,106,255,.15);
+    font-size: 15px;
+  }
+  .attachment-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .attachment-title {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 600;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+  .attachment-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+  .attachment-remove {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px;
+    border-radius: 6px;
+    transition: color .15s ease, background .15s ease;
+  }
+  .attachment-remove:hover {
+    color: #fff;
+    background: rgba(255,255,255,.08);
+  }
   .input-row {
     display: flex;
     gap: 10px;
-    max-width: 720px;
-    margin: 0 auto;
     position: relative;
+    border: 1px dashed transparent;
+    border-radius: 12px;
+    padding: 6px;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  }
+  .input-row.drag-active {
+    border-color: var(--accent);
+    background: rgba(124,106,255,.08);
+    box-shadow: 0 0 0 1px rgba(124,106,255,.18) inset;
   }
   .input-row input {
     flex: 1;
@@ -648,6 +725,7 @@
     font-size: 14px;
     outline: none;
     transition: border-color .15s;
+    min-width: 0;
   }
   .input-row input:focus { border-color: var(--accent); }
   .input-row input::placeholder { color: var(--text-dim); }
@@ -1160,10 +1238,13 @@
 
   <!-- Input -->
   <div class="input-bar">
-    <div class="input-row">
-      <input id="msgInput" type="text" placeholder="输入消息，用 /help 查看指令..." autocomplete="off" disabled />
-      <button id="sendBtn" class="btn-send" disabled>发送</button>
-      <button id="stopBtn" class="btn-stop">中断</button>
+    <div class="composer-shell">
+      <div id="composerAttachments" class="composer-attachments hidden"></div>
+      <div id="inputRow" class="input-row">
+        <input id="msgInput" type="text" placeholder="输入消息，用 /help 查看指令..." autocomplete="off" disabled />
+        <button id="sendBtn" class="btn-send" disabled>发送</button>
+        <button id="stopBtn" class="btn-stop">中断</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1210,6 +1291,8 @@ const messagesEl    = $('#messages');
 const msgInput      = $('#msgInput');
 const sendBtn       = $('#sendBtn');
 const stopBtn       = $('#stopBtn');
+const inputRow      = $('#inputRow');
+const composerAttachments = $('#composerAttachments');
 const welcomeArea   = $('#welcomeArea');
 const typingEl      = $('#typing');
 const typingText    = $('#typingText');
@@ -1318,7 +1401,7 @@ const SLASH_COMMANDS = [
 const slashPopup = document.createElement('div');
 slashPopup.className = 'slash-popup hidden';
 slashPopup.innerHTML = '<div class="slash-list"></div>';
-msgInput.parentElement.appendChild(slashPopup);
+inputRow.appendChild(slashPopup);
 const slashList = slashPopup.querySelector('.slash-list');
 
 // ═══════════════════════════════════════════════════════
@@ -1339,6 +1422,8 @@ let pendingApprovals = [];
 let artifacts = [];
 let selectedArtifactId = null;
 let toastTimer = null;
+let pendingAttachments = [];
+let dragDepth = 0;
 
 const PERMISSION_MODE_META = {
   safe: { label: '🔒 Safe', className: 'permission-safe', status: '安全模式' },
@@ -1751,6 +1836,149 @@ function showToast(message) {
   toastTimer = setTimeout(() => {
     toastEl.classList.remove('show');
   }, 2000);
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const display = value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1);
+  return `${display} ${units[unitIndex]}`;
+}
+
+function detectFileKind(file) {
+  const name = (file?.name || '').toLowerCase();
+  const type = file?.type || '';
+  const ext = name.includes('.') ? name.split('.').pop() : '';
+  if (type.includes('json') || ext === 'json') return 'JSON';
+  if (type.includes('markdown') || ['md', 'markdown'].includes(ext)) return 'Markdown';
+  if (type.includes('csv') || ext === 'csv') return 'CSV';
+  if (['py'].includes(ext)) return 'Python';
+  if (['js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx'].includes(ext)) return 'JavaScript';
+  if (['html', 'htm'].includes(ext)) return 'HTML';
+  if (['css', 'scss', 'less'].includes(ext)) return 'CSS';
+  if (type.startsWith('text/') || ['txt', 'log', 'yaml', 'yml', 'xml', 'sh', 'java', 'go', 'rs', 'cpp', 'c', 'h'].includes(ext)) return '文本';
+  return type || (ext ? ext.toUpperCase() : '文件');
+}
+
+function fileIcon(kind, isUrl = false) {
+  if (isUrl) return '🔗';
+  if (['JSON', 'Markdown', 'CSV', 'Python', 'JavaScript', 'HTML', 'CSS', '文本'].includes(kind)) return '📄';
+  return '📎';
+}
+
+function renderPendingAttachments() {
+  composerAttachments.classList.toggle('hidden', pendingAttachments.length === 0);
+  composerAttachments.innerHTML = pendingAttachments.map(item => {
+    const meta = item.kind === 'url'
+      ? item.url
+      : `${item.fileKind} · ${formatFileSize(item.size)}`;
+    return `
+      <div class="attachment-card" data-attachment-id="${esc(item.id)}">
+        <div class="attachment-icon">${fileIcon(item.fileKind, item.kind === 'url')}</div>
+        <div class="attachment-content">
+          <div class="attachment-title">${esc(item.name)}</div>
+          <div class="attachment-meta">${esc(meta)}</div>
+        </div>
+        <button class="attachment-remove" type="button" data-remove-attachment="${esc(item.id)}" aria-label="删除">×</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function clearPendingAttachments() {
+  pendingAttachments = [];
+  renderPendingAttachments();
+}
+
+async function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.includes(',') ? result.split(',').pop() : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+
+  try {
+    const nextItems = await Promise.all(list.map(async (file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: 'file',
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      fileKind: detectFileKind(file),
+      base64: await readFileAsBase64(file),
+    })));
+    pendingAttachments = [...pendingAttachments, ...nextItems];
+    renderPendingAttachments();
+  } catch (err) {
+    console.error('处理文件失败:', err);
+    addMsg('error', '文件读取失败: ' + (err.message || err));
+  }
+}
+
+function upsertUrlAttachment(url) {
+  const normalized = String(url || '').trim();
+  if (!/^https?:\/\//i.test(normalized)) return false;
+  const existing = pendingAttachments.find(item => item.kind === 'url' && item.url === normalized);
+  if (existing) return true;
+  pendingAttachments = [
+    ...pendingAttachments.filter(item => item.kind !== 'url'),
+    {
+      id: `url-${Date.now()}`,
+      kind: 'url',
+      name: 'URL 引用',
+      url: normalized,
+      fileKind: 'URL',
+    },
+  ];
+  renderPendingAttachments();
+  return true;
+}
+
+function refreshUrlAttachmentFromInput() {
+  const trimmed = msgInput.value.trim();
+  const isPureUrl = /^https?:\/\/\S+$/i.test(trimmed);
+  if (isPureUrl) {
+    upsertUrlAttachment(trimmed);
+    return;
+  }
+  const before = pendingAttachments.length;
+  pendingAttachments = pendingAttachments.filter(item => item.kind !== 'url');
+  if (pendingAttachments.length !== before) {
+    renderPendingAttachments();
+  }
+}
+
+function buildSubmissionText(rawText) {
+  const trimmed = rawText.trim();
+  const parts = [];
+  const soleUrlAttachment = pendingAttachments.length === 1 && pendingAttachments[0]?.kind === 'url';
+  if (trimmed && !(soleUrlAttachment && trimmed === pendingAttachments[0].url)) {
+    parts.push(trimmed);
+  }
+  pendingAttachments.forEach(item => {
+    if (item.kind === 'file') {
+      parts.push(`[文件: ${item.name}]\n${item.base64}`);
+    } else if (item.kind === 'url') {
+      parts.push(`[URL: ${item.url}]`);
+    }
+  });
+  return parts.join('\n\n').trim();
 }
 
 async function copyText(text) {
@@ -2488,13 +2716,15 @@ function showQuestionModal(requestId, question) {
 // 输入交互
 // ═══════════════════════════════════════════════════════
 function sendMsg() {
-  const text = msgInput.value.trim();
+  const rawText = msgInput.value;
+  const text = buildSubmissionText(rawText);
   if (!text) return;
   hideSlashPopup();
   pendingUserEcho = text;
   addMsg('user', text);
   sendJson('session.submit', { text });
   msgInput.value = '';
+  clearPendingAttachments();
   setBusy(true);
   window._assistantMsg = null;
   activeToolCard = null;
@@ -2507,7 +2737,16 @@ function stopSession() {
 
 sendBtn.addEventListener('click', sendMsg);
 stopBtn.addEventListener('click', stopSession);
-msgInput.addEventListener('input', renderSlashPopup);
+msgInput.addEventListener('input', () => {
+  renderSlashPopup();
+  refreshUrlAttachmentFromInput();
+});
+msgInput.addEventListener('paste', (e) => {
+  const pastedText = e.clipboardData?.getData('text/plain')?.trim() || '';
+  if (/^https?:\/\/\S+$/i.test(pastedText)) {
+    requestAnimationFrame(() => refreshUrlAttachmentFromInput());
+  }
+});
 msgInput.addEventListener('blur', () => {
   setTimeout(() => {
     if (!slashPopup.contains(document.activeElement)) hideSlashPopup();
@@ -2545,6 +2784,42 @@ msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMsg();
+  }
+});
+
+composerAttachments.addEventListener('click', (e) => {
+  const removeBtn = e.target.closest('[data-remove-attachment]');
+  if (!removeBtn) return;
+  pendingAttachments = pendingAttachments.filter(item => item.id !== removeBtn.dataset.removeAttachment);
+  renderPendingAttachments();
+});
+
+['dragenter', 'dragover'].forEach((eventName) => {
+  inputRow.addEventListener(eventName, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth += eventName === 'dragenter' ? 1 : 0;
+    inputRow.classList.add('drag-active');
+  });
+});
+
+inputRow.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) {
+    inputRow.classList.remove('drag-active');
+  }
+});
+
+inputRow.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragDepth = 0;
+  inputRow.classList.remove('drag-active');
+  const files = e.dataTransfer?.files;
+  if (files?.length) {
+    await addFiles(files);
   }
 });
 
