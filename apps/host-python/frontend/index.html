@@ -319,6 +319,19 @@
     flex-direction: column;
     min-width: 0;
   }
+  .main-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+  .conversation-shell {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
 
   /* ── Top bar ── */
   .topbar {
@@ -429,6 +442,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
   }
   .messages::-webkit-scrollbar { width: 5px; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -1172,6 +1186,161 @@
     background: var(--surface2);
     color: var(--text);
   }
+
+  /* ── Preview panel ── */
+  .preview-panel {
+    width: min(40vw, 520px);
+    min-width: 340px;
+    max-width: 40%;
+    background: linear-gradient(180deg, rgba(20,24,34,.98), rgba(14,17,24,.98));
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .28s ease, opacity .2s ease;
+    box-shadow: -18px 0 40px rgba(0,0,0,.28);
+  }
+  .preview-panel.open {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .preview-title-wrap {
+    min-width: 0;
+  }
+  .preview-kicker {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+  }
+  .preview-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preview-close {
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.07);
+    color: var(--text);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .preview-close:hover { background: rgba(255,255,255,.14); }
+  .preview-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px;
+  }
+  .preview-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .preview-pre {
+    margin: 0;
+    background: rgba(0,0,0,.2);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .preview-code {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    font-family: 'SF Mono','Fira Code','Consolas',monospace;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .preview-line-no,
+  .preview-line-text {
+    padding: 0 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .preview-line-no {
+    color: rgba(139,143,163,.8);
+    text-align: right;
+    border-right: 1px solid rgba(255,255,255,.06);
+    user-select: none;
+    background: rgba(255,255,255,.02);
+  }
+  .preview-line-text {
+    color: var(--text);
+  }
+  .preview-json .json-key { color: #93c5fd; }
+  .preview-json .json-string { color: #86efac; }
+  .preview-json .json-number { color: #fca5a5; }
+  .preview-json .json-boolean { color: #f9a8d4; }
+  .preview-json .json-null { color: #c4b5fd; }
+  .preview-markdown {
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .preview-markdown pre {
+    background: rgba(0,0,0,.28);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow: auto;
+    margin: 12px 0;
+  }
+  .preview-markdown code {
+    font-family: 'SF Mono','Fira Code','Consolas',monospace;
+    background: rgba(255,255,255,.06);
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+  .preview-markdown pre code { background: transparent; padding: 0; }
+  .preview-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 12px;
+    background: rgba(255,255,255,.03);
+  }
+  .preview-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 72vh;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    background: #111827;
+  }
+  @media (max-width: 1100px) {
+    .preview-panel {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: min(88vw, 520px);
+      max-width: none;
+      z-index: 40;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1220,32 +1389,49 @@
     </div>
   </div>
 
-  <!-- Messages -->
-  <div id="messages" class="messages">
-    <div id="welcomeArea" class="welcome">
-      <div class="logo">🛠️</div>
-      <div>OpenHarness Desktop MVP</div>
-      <div class="sub">HTTP + WebSocket · 基于 OpenHarness 原生事件协议</div>
-      <div class="sub" id="statusText">正在连接...</div>
-    </div>
-  </div>
+  <div class="main-body">
+    <div class="conversation-shell">
+      <!-- Messages -->
+      <div id="messages" class="messages">
+        <div id="welcomeArea" class="welcome">
+          <div class="logo">🛠️</div>
+          <div>OpenHarness Desktop MVP</div>
+          <div class="sub">HTTP + WebSocket · 基于 OpenHarness 原生事件协议</div>
+          <div class="sub" id="statusText">正在连接...</div>
+        </div>
+      </div>
 
-  <!-- Typing -->
-  <div id="typing" class="typing-indicator hidden">
-    <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-    <span id="typingText">思考中</span>
-  </div>
+      <!-- Typing -->
+      <div id="typing" class="typing-indicator hidden">
+        <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <span id="typingText">思考中</span>
+      </div>
 
-  <!-- Input -->
-  <div class="input-bar">
-    <div class="composer-shell">
-      <div id="composerAttachments" class="composer-attachments hidden"></div>
-      <div id="inputRow" class="input-row">
-        <input id="msgInput" type="text" placeholder="输入消息，用 /help 查看指令..." autocomplete="off" disabled />
-        <button id="sendBtn" class="btn-send" disabled>发送</button>
-        <button id="stopBtn" class="btn-stop">中断</button>
+      <!-- Input -->
+      <div class="input-bar">
+        <div class="composer-shell">
+          <div id="composerAttachments" class="composer-attachments hidden"></div>
+          <div id="inputRow" class="input-row">
+            <input id="msgInput" type="text" placeholder="输入消息，用 /help 查看指令..." autocomplete="off" disabled />
+            <button id="sendBtn" class="btn-send" disabled>发送</button>
+            <button id="stopBtn" class="btn-stop">中断</button>
+          </div>
+        </div>
       </div>
     </div>
+
+    <aside id="previewPanel" class="preview-panel" aria-hidden="true">
+      <div class="preview-header">
+        <div class="preview-title-wrap">
+          <div class="preview-kicker">产物预览</div>
+          <div id="previewTitle" class="preview-title">未选择产物</div>
+        </div>
+        <button id="previewClose" class="preview-close" type="button" aria-label="关闭预览">✕</button>
+      </div>
+      <div id="previewContent" class="preview-content">
+        <div class="preview-empty">点击左侧产物即可在这里预览文本、Markdown、JSON、图片或 PDF。</div>
+      </div>
+    </aside>
   </div>
 </div>
 
@@ -1321,6 +1507,10 @@ const artifactList = $('#artifactList');
 const artifactCount = $('#artifactCount');
 const exportSessionBtn = $('#exportSessionBtn');
 const toastEl = $('#toast');
+const previewPanel = $('#previewPanel');
+const previewTitle = $('#previewTitle');
+const previewContent = $('#previewContent');
+const previewClose = $('#previewClose');
 
 const SETTINGS_STORAGE_KEY = 'openharness.desktop.settings';
 let settingsButton = null;
@@ -1822,6 +2012,54 @@ function renderMd(s) {
   return typeof marked !== 'undefined' ? marked.parse(s || '') : esc(s);
 }
 
+function getArtifactDisplayName(item) {
+  if (!item) return '未命名产物';
+  if (item.file_path) {
+    const parts = String(item.file_path).split(/[\\/]/).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return item.tool_name || `artifact-${item.artifact_id}`;
+}
+
+function syntaxHighlightJson(jsonText) {
+  return esc(jsonText).replace(/(&quot;(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\&quot;])*&quot;)(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?/g, (match, stringToken, keySuffix, boolToken) => {
+    if (stringToken) {
+      return `<span class="${keySuffix ? 'json-key' : 'json-string'}">${stringToken}</span>${keySuffix || ''}`;
+    }
+    if (boolToken) return `<span class="json-boolean">${match}</span>`;
+    if (match === 'null') return `<span class="json-null">${match}</span>`;
+    return `<span class="json-number">${match}</span>`;
+  });
+}
+
+function renderCodePreview(content, { isJson = false } = {}) {
+  const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+  const body = lines.map((line, index) => {
+    const renderedLine = isJson ? syntaxHighlightJson(line) : esc(line || ' ');
+    return `
+      <div class="preview-line-no">${index + 1}</div>
+      <div class="preview-line-text">${renderedLine || '&nbsp;'}</div>
+    `;
+  }).join('');
+  return `<pre class="preview-pre ${isJson ? 'preview-json' : ''}"><code class="preview-code">${body}</code></pre>`;
+}
+
+function openPreviewPanel(title) {
+  previewTitle.textContent = title || '未命名产物';
+  previewPanel.classList.add('open');
+  previewPanel.setAttribute('aria-hidden', 'false');
+}
+
+function closePreviewPanel() {
+  previewPanel.classList.remove('open');
+  previewPanel.setAttribute('aria-hidden', 'true');
+}
+
+function setPreviewLoading(title) {
+  openPreviewPanel(title);
+  previewContent.innerHTML = '<div class="preview-empty">正在加载预览…</div>';
+}
+
 function summarizeArtifactContent(content) {
   const normalized = (content || '').replace(/\s+/g, ' ').trim();
   if (!normalized) return '空产物';
@@ -2033,7 +2271,7 @@ function renderArtifactList() {
 
   artifactList.innerHTML = artifacts.map(item => `
     <div class="artifact-item ${item.artifact_id === selectedArtifactId ? 'active' : ''}" data-artifact-id="${item.artifact_id}">
-      <div class="artifact-item-title" title="${esc(item.tool_name || '未命名工具')} · ${esc(summarizeArtifactContent(item.content || ''))}">${esc(item.tool_name || '未命名工具')}</div>
+      <div class="artifact-item-title" title="${esc(getArtifactDisplayName(item))} · ${esc(summarizeArtifactContent(item.content || ''))}">${esc(getArtifactDisplayName(item))}</div>
       <div class="artifact-item-meta">
         <span>${esc(item.artifact_type || 'text')}</span>
         <span>${esc(formatTime(item.created_at))}</span>
@@ -2057,19 +2295,53 @@ async function loadArtifacts(sessionIdToLoad = currentSessionId) {
 
 async function showArtifact(artifactId) {
   if (!artifactId) return;
+  const artifact = artifacts.find(item => item.artifact_id === artifactId);
+  const fallbackTitle = getArtifactDisplayName(artifact);
+  selectedArtifactId = artifactId;
+  renderArtifactList();
+  setPreviewLoading(fallbackTitle);
+
   try {
-    const artifact = await api(`/artifacts/${artifactId}`);
-    selectedArtifactId = artifact.artifact_id;
-    renderArtifactList();
-    clearMessages();
-    hideWelcome();
-    addMsg('system', `查看产物 · ${artifact.tool_name || '未命名工具'} · ${artifact.artifact_type || 'text'}`);
-    if (artifact.file_path) {
-      addMsg('system', `文件路径：${artifact.file_path}`);
+    const res = await fetch(`${API_BASE}/api/artifacts/${artifactId}/preview`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `HTTP ${res.status}`);
     }
-    addMsg('assistant', artifact.content || '_空产物_');
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const artifactName = res.headers.get('x-artifact-name') || fallbackTitle;
+    openPreviewPanel(artifactName);
+
+    if (contentType.startsWith('image/')) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      previewContent.innerHTML = `<img class="preview-image" src="${url}" alt="${esc(artifactName)}" />`;
+      const img = previewContent.querySelector('img');
+      img.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+      return;
+    }
+
+    if (contentType.includes('pdf')) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      previewContent.innerHTML = `<embed class="preview-frame" src="${url}" type="application/pdf" />`;
+      return;
+    }
+
+    const text = await res.text();
+    if (contentType.includes('markdown')) {
+      previewContent.innerHTML = `<div class="preview-markdown">${renderMd(text)}</div>`;
+      return;
+    }
+
+    if (contentType.includes('json')) {
+      previewContent.innerHTML = renderCodePreview(text, { isJson: true });
+      return;
+    }
+
+    previewContent.innerHTML = renderCodePreview(text);
   } catch (e) {
-    addMsg('error', '加载产物失败: ' + e.message);
+    previewContent.innerHTML = `<div class="preview-empty" style="color:var(--red);">加载预览失败：${esc(e.message)}</div>`;
   }
 }
 
@@ -2385,6 +2657,9 @@ async function resumeSession(id) {
     artifacts = [];
     selectedArtifactId = null;
     renderArtifactList();
+    closePreviewPanel();
+    previewTitle.textContent = '未选择产物';
+    previewContent.innerHTML = '<div class="preview-empty">点击左侧产物即可在这里预览文本、Markdown、JSON、图片或 PDF。</div>';
 
     const data = await api(`/sessions/${id}/resume`, { method: 'POST' });
     
@@ -2851,6 +3126,10 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && settingsOverlay && !settingsOverlay.classList.contains('hidden')) {
     closeSettingsPanel();
+    return;
+  }
+  if (e.key === 'Escape' && previewPanel && previewPanel.classList.contains('open')) {
+    closePreviewPanel();
   }
 });
 
@@ -2877,6 +3156,7 @@ artifactList.addEventListener('click', (e) => {
   if (!item) return;
   showArtifact(item.dataset.artifactId);
 });
+previewClose.addEventListener('click', closePreviewPanel);
 
 exportSessionBtn.addEventListener('click', exportCurrentSession);
 

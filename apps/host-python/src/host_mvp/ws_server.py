@@ -10,6 +10,8 @@ from __future__ import annotations
 
 # ─── 必须在所有 OpenHarness 导入之前执行 ───────────────
 from pathlib import Path
+import base64
+import mimetypes
 import os
 import sys
 import time
@@ -51,7 +53,7 @@ from uuid import uuid4
 
 # ─── 3rd party ──────────────────────────────────────────
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # ─── 内部模块 ───────────────────────────────────────────
@@ -752,6 +754,81 @@ async def get_artifact_detail(artifact_id: str):
     if not artifact:
         return {"error": "artifact not found"}, 404
     return artifact.to_dict()
+
+
+def _artifact_display_name(artifact) -> str:
+    if artifact.file_path:
+        return Path(artifact.file_path).name
+    return artifact.tool_name or f"artifact-{artifact.artifact_id}"
+
+
+def _decode_data_url(content: str) -> tuple[str | None, bytes | None]:
+    if not isinstance(content, str) or not content.startswith("data:"):
+        return None, None
+    header, _, payload = content.partition(",")
+    if not payload:
+        return None, None
+    mime = header[5:].split(";", 1)[0] or "application/octet-stream"
+    try:
+        if ";base64" in header:
+            return mime, base64.b64decode(payload)
+        return mime, payload.encode("utf-8")
+    except Exception:
+        return None, None
+
+
+@app.get("/api/artifacts/{artifact_id}/preview")
+async def preview_artifact(artifact_id: str):
+    artifact = db_get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="artifact not found")
+
+    display_name = _artifact_display_name(artifact)
+    headers = {
+        "X-Artifact-Name": display_name,
+        "X-Artifact-Type": artifact.artifact_type or "text",
+    }
+
+    file_path = Path(artifact.file_path).expanduser() if artifact.file_path else None
+    if file_path and file_path.exists() and file_path.is_file():
+        mime, _ = mimetypes.guess_type(str(file_path))
+        mime = mime or "application/octet-stream"
+        if mime == "application/json" or file_path.suffix.lower() == ".json":
+            try:
+                formatted = json.dumps(json.loads(file_path.read_text(encoding="utf-8")), ensure_ascii=False, indent=2)
+            except Exception:
+                formatted = file_path.read_text(encoding="utf-8", errors="replace")
+            return PlainTextResponse(formatted, media_type="application/json", headers=headers)
+        if mime.startswith("text/") or file_path.suffix.lower() in {".md", ".markdown", ".log", ".py", ".js", ".ts", ".html", ".css", ".yaml", ".yml", ".xml", ".sh"}:
+            return PlainTextResponse(file_path.read_text(encoding="utf-8", errors="replace"), media_type=mime, headers=headers)
+        return FileResponse(file_path, media_type=mime, filename=display_name, headers=headers)
+
+    content = artifact.content or ""
+    artifact_type = (artifact.artifact_type or "text").lower()
+
+    if artifact_type == "json":
+        try:
+            formatted = json.dumps(json.loads(content), ensure_ascii=False, indent=2)
+        except Exception:
+            formatted = content
+        return PlainTextResponse(formatted, media_type="application/json", headers=headers)
+
+    if artifact_type in {"image", "pdf"}:
+        mime, decoded = _decode_data_url(content)
+        if decoded is not None:
+            return Response(content=decoded, media_type=mime or ("image/png" if artifact_type == "image" else "application/pdf"), headers=headers)
+        try:
+            decoded = base64.b64decode(content, validate=True)
+            media_type = "image/png" if artifact_type == "image" else "application/pdf"
+            return Response(content=decoded, media_type=media_type, headers=headers)
+        except Exception:
+            if artifact_type == "pdf":
+                return PlainTextResponse(content, media_type="text/plain", headers=headers)
+
+    if artifact_type == "markdown":
+        return PlainTextResponse(content, media_type="text/markdown", headers=headers)
+
+    return PlainTextResponse(content, media_type="text/plain", headers=headers)
 
 
 # ═══════════════════════════════════════════════════════
