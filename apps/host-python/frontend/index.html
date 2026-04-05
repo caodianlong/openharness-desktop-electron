@@ -331,6 +331,7 @@
     gap: 10px;
     max-width: 720px;
     margin: 0 auto;
+    position: relative;
   }
   .input-row input {
     flex: 1;
@@ -374,6 +375,74 @@
     display: none;
   }
   .btn-stop:hover { background: #e06060; }
+
+  /* ── Slash commands ── */
+  .slash-popup {
+    position: absolute;
+    left: 0;
+    right: 84px;
+    bottom: calc(100% + 10px);
+    background: rgba(26, 29, 39, 0.92);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(124,106,255,.18);
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0,0,0,.4);
+    overflow: hidden;
+    z-index: 40;
+    animation: slashFadeIn .16s ease;
+  }
+  @keyframes slashFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .slash-popup.hidden { display: none !important; }
+  .slash-list {
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .slash-list::-webkit-scrollbar { width: 5px; }
+  .slash-list::-webkit-scrollbar-thumb { background: rgba(124,106,255,.22); border-radius: 999px; }
+  .slash-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .12s ease, transform .12s ease;
+  }
+  .slash-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 0 999px 999px 0;
+    background: var(--accent);
+    opacity: .9;
+  }
+  .slash-item:hover,
+  .slash-item.active {
+    background: rgba(124,106,255,.18);
+  }
+  .slash-item-command {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .slash-item-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .slash-empty {
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
 
   /* ── Welcome ── */
   .welcome {
@@ -554,6 +623,70 @@ const renameSave    = $('#renameSave');
 const renameCancel  = $('#renameCancel');
 const msgCountInfo  = $('#msgCountInfo');
 
+const SLASH_COMMANDS = [
+  { command: '/help', description: '显示可用命令列表' },
+  { command: '/clear', description: '清空当前对话历史' },
+  { command: '/compact [N]', description: '压缩对话上下文（保留最近 N 条，默认 6）' },
+  { command: '/model show', description: '显示当前模型' },
+  { command: '/model set MODEL', description: '设置模型' },
+  { command: '/status', description: '显示会话状态' },
+  { command: '/usage', description: '显示 token 使用统计' },
+  { command: '/cost', description: '显示估计成本' },
+  { command: '/stats', description: '显示会话统计' },
+  { command: '/summary [N]', description: '总结最近 N 条对话' },
+  { command: '/version', description: '显示 OpenHarness 版本' },
+  { command: '/config show', description: '显示配置' },
+  { command: '/config set KEY VALUE', description: '设置配置项' },
+  { command: '/permissions show', description: '显示权限模式' },
+  { command: '/permissions set MODE', description: '设置权限模式（default/plan/full_auto）' },
+  { command: '/plan on', description: '进入计划模式' },
+  { command: '/plan off', description: '退出计划模式' },
+  { command: '/fast on/off/toggle', description: '快速模式' },
+  { command: '/effort low/medium/high', description: '设置推理努力程度' },
+  { command: '/passes N', description: '设置推理轮数 (1-8)' },
+  { command: '/theme show', description: '显示主题' },
+  { command: '/theme set THEME', description: '设置主题' },
+  { command: '/login', description: '显示认证状态' },
+  { command: '/logout', description: '清除 API 密钥' },
+  { command: '/vim on/off/toggle', description: 'Vim 模式' },
+  { command: '/voice on/off/toggle', description: '语音模式' },
+  { command: '/doctor', description: '环境诊断' },
+  { command: '/files', description: '列出工作区文件' },
+  { command: '/diff', description: '显示 git diff' },
+  { command: '/diff full', description: '显示完整 diff' },
+  { command: '/branch show', description: '显示当前分支' },
+  { command: '/branch list', description: '列出分支' },
+  { command: '/commit MSG', description: '快速提交' },
+  { command: '/rewind [N]', description: '撤回最近 N 轮对话' },
+  { command: '/copy', description: '复制最后一条回复' },
+  { command: '/resume', description: '恢复最近会话' },
+  { command: '/session show', description: '显示会话存储信息' },
+  { command: '/session ls', description: '列体会话文件' },
+  { command: '/tag NAME', description: '给当前会话打标签' },
+  { command: '/init', description: '初始化项目 OpenHarness 配置' },
+  { command: '/memory list', description: '列出记忆文件' },
+  { command: '/memory add TITLE :: CONTENT', description: '添加记忆' },
+  { command: '/tasks list', description: '列出后台任务' },
+  { command: '/tasks run CMD', description: '执行后台任务' },
+  { command: '/agents', description: '列出代理任务' },
+  { command: '/skills', description: '列出可用技能' },
+  { command: '/plugins', description: '列出插件' },
+  { command: '/mcp', description: '显示 MCP 状态' },
+  { command: '/issue show', description: '显示项目 issue 上下文' },
+  { command: '/issue clear', description: '清除 issue 上下文' },
+  { command: '/pr_comments show', description: '显示 PR 评论上下文' },
+  { command: '/export', description: '导出会话记录' },
+  { command: '/share', description: '创建可分享的快照快照' },
+  { command: '/exit', description: '退出（会话）' },
+  { command: '/quit', description: '退出（会话）' },
+];
+
+const slashPopup = document.createElement('div');
+slashPopup.className = 'slash-popup hidden';
+slashPopup.innerHTML = '<div class="slash-list"></div>';
+msgInput.parentElement.appendChild(slashPopup);
+const slashList = slashPopup.querySelector('.slash-list');
+
 // ═══════════════════════════════════════════════════════
 // 状态
 // ═══════════════════════════════════════════════════════
@@ -564,6 +697,74 @@ let sessionId = null;
 let activeToolCard = null;
 let toolCounter = 0;
 let sessions = [];
+let slashMatches = [];
+let slashSelectedIndex = 0;
+let pendingUserEcho = null;
+
+function getSlashQuery(text) {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith('/')) return null;
+  if (/\s{2,}/.test(trimmed)) return null;
+  return trimmed.slice(1).toLowerCase();
+}
+
+function hideSlashPopup() {
+  slashPopup.classList.add('hidden');
+  slashMatches = [];
+  slashSelectedIndex = 0;
+}
+
+function getSlashMatches(query) {
+  if (query === null) return [];
+  if (!query) return SLASH_COMMANDS.slice(0, 12);
+  return SLASH_COMMANDS.filter(({ command, description }) => {
+    const haystack = `${command} ${description}`.toLowerCase();
+    return haystack.includes(query);
+  }).slice(0, 12);
+}
+
+function applySlashCommand(command) {
+  msgInput.value = command;
+  hideSlashPopup();
+  msgInput.focus();
+  requestAnimationFrame(() => {
+    const len = msgInput.value.length;
+    msgInput.setSelectionRange(len, len);
+  });
+}
+
+function renderSlashPopup() {
+  const query = getSlashQuery(msgInput.value);
+  slashMatches = getSlashMatches(query);
+
+  if (query === null || slashMatches.length === 0) {
+    if (query !== null && msgInput.value.trimStart().startsWith('/')) {
+      slashPopup.classList.remove('hidden');
+      slashList.innerHTML = '<div class="slash-empty">没有匹配的命令</div>';
+    } else {
+      hideSlashPopup();
+    }
+    return;
+  }
+
+  if (slashSelectedIndex >= slashMatches.length) {
+    slashSelectedIndex = 0;
+  }
+
+  slashList.innerHTML = slashMatches.map((item, index) => `
+    <div class="slash-item ${index === slashSelectedIndex ? 'active' : ''}" data-index="${index}">
+      <div class="slash-item-command">${esc(item.command)}</div>
+      <div class="slash-item-desc">${esc(item.description)}</div>
+    </div>
+  `).join('');
+
+  slashPopup.classList.remove('hidden');
+
+  const activeItem = slashList.querySelector('.slash-item.active');
+  if (activeItem) {
+    activeItem.scrollIntoView({ block: 'nearest' });
+  }
+}
 
 function hideWelcome() {
   if (welcomeArea && !welcomeArea.classList.contains('hidden')) {
@@ -966,7 +1167,13 @@ function handleEvent(data) {
     case 'transcript.item': {
       const role = payload.role;
       const text = payload.text || '';
-      if (role === 'user') addMsg('user', text);
+      if (role === 'user') {
+        if (pendingUserEcho === text) {
+          pendingUserEcho = null;
+        } else {
+          addMsg('user', text);
+        }
+      }
       else if (role === 'system') addMsg('system', text);
       break;
     }
@@ -1049,6 +1256,8 @@ function showQuestionModal(requestId, question) {
 function sendMsg() {
   const text = msgInput.value.trim();
   if (!text) return;
+  hideSlashPopup();
+  pendingUserEcho = text;
   addMsg('user', text);
   sendJson('session.submit', { text });
   msgInput.value = '';
@@ -1064,10 +1273,60 @@ function stopSession() {
 
 sendBtn.addEventListener('click', sendMsg);
 stopBtn.addEventListener('click', stopSession);
+msgInput.addEventListener('input', renderSlashPopup);
+msgInput.addEventListener('blur', () => {
+  setTimeout(() => {
+    if (!slashPopup.contains(document.activeElement)) hideSlashPopup();
+  }, 120);
+});
 msgInput.addEventListener('keydown', (e) => {
+  const popupOpen = !slashPopup.classList.contains('hidden') && slashMatches.length > 0;
+
+  if (popupOpen && e.key === 'ArrowDown') {
+    e.preventDefault();
+    slashSelectedIndex = (slashSelectedIndex + 1) % slashMatches.length;
+    renderSlashPopup();
+    return;
+  }
+
+  if (popupOpen && e.key === 'ArrowUp') {
+    e.preventDefault();
+    slashSelectedIndex = (slashSelectedIndex - 1 + slashMatches.length) % slashMatches.length;
+    renderSlashPopup();
+    return;
+  }
+
+  if (!slashPopup.classList.contains('hidden') && e.key === 'Escape') {
+    e.preventDefault();
+    hideSlashPopup();
+    return;
+  }
+
+  if (popupOpen && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    applySlashCommand(slashMatches[slashSelectedIndex].command);
+    return;
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMsg();
+  }
+});
+
+slashList.addEventListener('mousedown', (e) => {
+  const item = e.target.closest('.slash-item');
+  if (!item) return;
+  e.preventDefault();
+  const index = Number(item.dataset.index || 0);
+  if (slashMatches[index]) {
+    applySlashCommand(slashMatches[index].command);
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target !== msgInput && !slashPopup.contains(e.target)) {
+    hideSlashPopup();
   }
 });
 
