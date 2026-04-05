@@ -170,6 +170,45 @@
     color: var(--text-dim);
     text-align: center;
   }
+  .sidebar-footer-actions {
+    padding: 10px 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  .approval-queue-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .approval-queue-btn:hover {
+    background: var(--surface3);
+    border-color: rgba(124,106,255,.45);
+    transform: translateY(-1px);
+  }
+  .approval-badge {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--red-dim);
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .approval-badge.hidden {
+    display: none !important;
+  }
 
   /* ════════════════ Main ════════════════ */
   .main {
@@ -642,6 +681,157 @@
   }
   .rename-dialog input:focus { border-color: var(--accent); }
   .rename-dialog .btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── Approval queue / modal ── */
+  .approval-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: min(420px, calc(100vw - 40px));
+    max-height: min(70vh, 640px);
+    display: flex;
+    flex-direction: column;
+    background: rgba(18, 22, 31, .96);
+    border: 1px solid rgba(124,106,255,.2);
+    border-radius: 18px;
+    box-shadow: 0 24px 56px rgba(0,0,0,.45);
+    overflow: hidden;
+    z-index: 180;
+  }
+  .approval-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    background: linear-gradient(180deg, rgba(124,106,255,.12), rgba(124,106,255,.04));
+  }
+  .approval-panel-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .approval-panel-close {
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    cursor: pointer;
+    transition: background .15s ease, transform .15s ease;
+  }
+  .approval-panel-close:hover {
+    background: rgba(255,255,255,.14);
+    transform: scale(1.03);
+  }
+  .approval-list {
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .approval-empty {
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .approval-item {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    padding: 14px;
+  }
+  .approval-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .approval-item-tool {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .approval-item-time {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .approval-item-reason {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+  }
+  .approval-item-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .approval-action-btn {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+  }
+  .approval-action-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+    box-shadow: 0 10px 22px rgba(0,0,0,.18);
+  }
+  .approval-action-btn.allow {
+    background: linear-gradient(180deg, #34d399, #10b981);
+    color: #062a1d;
+  }
+  .approval-action-btn.deny {
+    background: rgba(255,255,255,.08);
+    color: var(--text);
+  }
+  .approval-modal {
+    max-width: 720px;
+    align-self: center;
+    background: linear-gradient(180deg, rgba(20,24,34,.98), rgba(14,17,24,.98));
+    border: 1px solid rgba(124,106,255,.28);
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 22px 50px rgba(0,0,0,.38);
+    animation: fadeIn .3s ease;
+  }
+  .approval-modal h3 {
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+  .approval-modal p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.65;
+    margin-bottom: 14px;
+  }
+  .approval-modal .btns {
+    display: flex;
+    gap: 10px;
+  }
+  .approval-modal button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+  }
+  .approval-modal button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+    box-shadow: 0 10px 22px rgba(0,0,0,.18);
+  }
 </style>
 </head>
 <body>
@@ -657,6 +847,12 @@
   </div>
   <div id="sessionList" class="sidebar-list">
     <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">加载中...</div>
+  </div>
+  <div class="sidebar-footer-actions">
+    <button id="approvalQueueBtn" class="approval-queue-btn" title="查看待审批队列">
+      <span>待审批</span>
+      <span id="approvalBadge" class="approval-badge hidden">0</span>
+    </button>
   </div>
   <div class="sidebar-footer">OpenHarness Desktop MVP</div>
 </aside>
@@ -714,6 +910,16 @@
   </div>
 </div>
 
+<div id="approvalPanel" class="approval-panel hidden">
+  <div class="approval-panel-header">
+    <h3>待审批队列</h3>
+    <button id="approvalPanelClose" class="approval-panel-close" title="关闭">✕</button>
+  </div>
+  <div id="approvalList" class="approval-list">
+    <div class="approval-empty">暂无待审批项</div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // 配置
@@ -746,6 +952,11 @@ const renameInput   = $('#renameInput');
 const renameSave    = $('#renameSave');
 const renameCancel  = $('#renameCancel');
 const msgCountInfo  = $('#msgCountInfo');
+const approvalQueueBtn = $('#approvalQueueBtn');
+const approvalBadge = $('#approvalBadge');
+const approvalPanel = $('#approvalPanel');
+const approvalPanelClose = $('#approvalPanelClose');
+const approvalList = $('#approvalList');
 
 const SLASH_COMMANDS = [
   { command: '/help', description: '显示可用命令列表' },
@@ -825,6 +1036,7 @@ let slashMatches = [];
 let slashSelectedIndex = 0;
 let pendingUserEcho = null;
 let currentPermissionMode = 'safe';
+let pendingApprovals = [];
 
 const PERMISSION_MODE_META = {
   safe: { label: '🔒 Safe', className: 'permission-safe', status: '安全模式' },
@@ -995,6 +1207,16 @@ function setBusy(state) {
   typingEl.classList.toggle('hidden', !state);
 }
 
+function formatApprovalTime(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function renderMd(s) {
   return typeof marked !== 'undefined' ? marked.parse(s || '') : esc(s);
 }
@@ -1091,6 +1313,79 @@ function formatTime(ts) {
   return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 
+function updateApprovalBadge() {
+  const count = pendingApprovals.length;
+  approvalBadge.textContent = String(count);
+  approvalBadge.classList.toggle('hidden', count === 0);
+}
+
+function removePendingApproval(approvalId) {
+  pendingApprovals = pendingApprovals.filter(item => item.approval_id !== approvalId);
+  document.querySelectorAll(`.approval-modal[data-approval-id="${approvalId}"]`).forEach(el => el.remove());
+  renderApprovalList();
+  updateApprovalBadge();
+}
+
+function renderApprovalList() {
+  if (!pendingApprovals.length) {
+    approvalList.innerHTML = '<div class="approval-empty">暂无待审批项</div>';
+    return;
+  }
+
+  approvalList.innerHTML = pendingApprovals.map(item => `
+    <div class="approval-item" data-approval-id="${item.approval_id}">
+      <div class="approval-item-head">
+        <div class="approval-item-tool">${esc(item.tool_name || '未知工具')}</div>
+        <div class="approval-item-time">${esc(formatApprovalTime(item.requested_at))}</div>
+      </div>
+      <div class="approval-item-reason">${esc(item.reason || '无审批理由')}</div>
+      <div class="approval-item-actions">
+        <button class="approval-action-btn allow" data-decision="allow" data-approval-id="${item.approval_id}">批准</button>
+        <button class="approval-action-btn deny" data-decision="deny" data-approval-id="${item.approval_id}">拒绝</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function upsertApproval(item) {
+  if (!item?.approval_id) return;
+  const idx = pendingApprovals.findIndex(entry => entry.approval_id === item.approval_id);
+  if (idx >= 0) {
+    pendingApprovals[idx] = { ...pendingApprovals[idx], ...item };
+  } else {
+    pendingApprovals.push(item);
+  }
+  pendingApprovals.sort((a, b) => (a.requested_at || 0) - (b.requested_at || 0));
+  renderApprovalList();
+  updateApprovalBadge();
+}
+
+async function loadPendingApprovals(sessionIdToLoad = currentSessionId) {
+  if (!sessionIdToLoad) return;
+  try {
+    const data = await api(`/sessions/${sessionIdToLoad}/approvals?status=pending`);
+    if (sessionIdToLoad !== currentSessionId) return;
+    pendingApprovals = data.approvals || [];
+    renderApprovalList();
+    updateApprovalBadge();
+  } catch (e) {
+    console.error('加载待审批失败:', e);
+  }
+}
+
+function toggleApprovalPanel(force) {
+  const show = typeof force === 'boolean' ? force : approvalPanel.classList.contains('hidden');
+  approvalPanel.classList.toggle('hidden', !show);
+}
+
+function respondToApproval(approvalId, allowed) {
+  sendJson('permission.response', { request_id: approvalId, allowed });
+  removePendingApproval(approvalId);
+  if (!pendingApprovals.length) {
+    toggleApprovalPanel(false);
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════
@@ -1185,6 +1480,7 @@ async function resumeSession(id) {
     sessionId = id;
     currentSessionId = id;
     connect();
+    await loadPendingApprovals(id);
     
     // 更新 topbar
     topbarTitle.textContent = data.session.title || '新对话';
@@ -1398,6 +1694,14 @@ function handleEvent(data) {
     }
 
     case 'approval.request':
+      upsertApproval({
+        approval_id: payload.request_id,
+        request_type: 'permission',
+        tool_name: payload.tool_name,
+        reason: payload.reason,
+        status: 'pending',
+        requested_at: Date.now() / 1000,
+      });
       showApprovalModal(payload.request_id, payload.tool_name, payload.reason);
       setBusy(false);
       setTyping('等待审批');
@@ -1423,22 +1727,21 @@ function showApprovalModal(requestId, toolName, reason) {
   hideWelcome();
   const div = document.createElement('div');
   div.className = 'approval-modal';
+  div.dataset.approvalId = requestId;
   div.innerHTML = `
     <h3>⚠️ 工具执行审批</h3>
     <p>Agent 请求使用 <strong>${esc(toolName)}</strong><br>${esc(reason)}</p>
     <div class="btns">
-      <button class="btn-allow" style="padding:6px 18px;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;background:var(--green);color:#000;">允许</button>
-      <button class="btn-deny" style="padding:6px 18px;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;background:var(--surface2);color:var(--text);">拒绝</button>
+      <button class="btn-allow" style="background:linear-gradient(180deg,#34d399,#10b981);color:#062a1d;">允许</button>
+      <button class="btn-deny" style="background:rgba(255,255,255,.08);color:var(--text);">拒绝</button>
     </div>
   `;
   messagesEl.appendChild(div);
   div.querySelector('.btn-allow').addEventListener('click', () => {
-    div.remove();
-    sendJson('permission.response', { request_id: requestId, allowed: true });
+    respondToApproval(requestId, true);
   });
   div.querySelector('.btn-deny').addEventListener('click', () => {
-    div.remove();
-    sendJson('permission.response', { request_id: requestId, allowed: false });
+    respondToApproval(requestId, false);
   });
   scrollBottom();
 }
@@ -1564,6 +1867,14 @@ permissionMenu.addEventListener('click', (e) => {
   updatePermissionMode(option.dataset.mode);
 });
 
+approvalQueueBtn.addEventListener('click', () => toggleApprovalPanel());
+approvalPanelClose.addEventListener('click', () => toggleApprovalPanel(false));
+approvalList.addEventListener('click', (e) => {
+  const button = e.target.closest('.approval-action-btn');
+  if (!button) return;
+  respondToApproval(button.dataset.approvalId, button.dataset.decision === 'allow');
+});
+
 // ═══════════════════════════════════════════════════════
 // 侧边栏
 // ═══════════════════════════════════════════════════════
@@ -1593,6 +1904,8 @@ async function init() {
 }
 
 setPermissionModeUI(currentPermissionMode);
+renderApprovalList();
+updateApprovalBadge();
 init();
 </script>
 </body>

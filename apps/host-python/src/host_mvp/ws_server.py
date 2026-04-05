@@ -57,12 +57,16 @@ from fastapi.staticfiles import StaticFiles
 # ─── 内部模块 ───────────────────────────────────────────
 from . import session_store
 from .session_store import (
+    ApprovalRecord,
     create_session as db_create_session,
+    create_approval as db_create_approval,
     get_session as db_get_session,
     list_sessions as db_list_sessions,
+    list_approvals as db_list_approvals,
     save_message,
     get_messages as db_get_messages,
     update_session as db_update_session,
+    update_approval_status as db_update_approval_status,
     delete_session as db_delete_session,
     fork_session as db_fork_session,
     increment_message_count,
@@ -238,6 +242,12 @@ class AgentSession:
         return {"ok": True, "mode": mode}
 
     async def handle_permission_response(self, request_id: str, allowed: bool):
+        db_update_approval_status(
+            request_id,
+            status="approved" if allowed else "denied",
+            decision="allow" if allowed else "deny",
+            decided_at=time.time(),
+        )
         fut = self._permission_futures.pop(request_id, None)
         if fut and not fut.done():
             fut.set_result(allowed)
@@ -273,6 +283,16 @@ class AgentSession:
         rid = uuid4().hex
         fut: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
         self._permission_futures[rid] = fut
+
+        db_create_approval(ApprovalRecord(
+            approval_id=rid,
+            session_id=self._db_session_id,
+            request_type="permission",
+            tool_name=tool_name,
+            reason=reason,
+            status="pending",
+            requested_at=time.time(),
+        ))
 
         await self._push("approval.request", {
             "request_id": rid,
@@ -582,6 +602,19 @@ async def update_permission_mode(session_id: str, body: dict):
     # Session not in memory, just update DB
     db_update_session(session_id, permission_mode=mode)
     return {"ok": True, "mode": mode}
+
+
+@app.get("/api/sessions/{session_id}/approvals")
+async def get_session_approvals(session_id: str, status: str | None = "pending"):
+    meta = db_get_session(session_id)
+    if not meta:
+        return {"error": "session not found"}, 404
+
+    approvals = db_list_approvals(session_id, status=status)
+    return {
+        "session_id": session_id,
+        "approvals": [approval.to_dict() for approval in approvals],
+    }
 
 
 # ═══════════════════════════════════════════════════════

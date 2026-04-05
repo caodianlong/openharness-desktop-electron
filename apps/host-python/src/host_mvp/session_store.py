@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS messages (
     seq           INTEGER NOT NULL,         -- 消息顺序号
     created_at    REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS approvals (
+    approval_id   TEXT PRIMARY KEY,
+    session_id    TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    request_type  TEXT NOT NULL DEFAULT 'permission',
+    tool_name     TEXT DEFAULT '',
+    reason        TEXT DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    requested_at  REAL NOT NULL,
+    decided_at    REAL,
+    decision      TEXT DEFAULT ''
+);
 """
 
 
@@ -138,6 +150,46 @@ class MessageRecord:
             "tool_input": json.loads(self.tool_input) if self.tool_input else None,
             "tool_output": self.tool_output,
             "is_error": self.is_error,
+        }
+
+
+@dataclass
+class ApprovalRecord:
+    approval_id: str
+    session_id: str
+    request_type: str = "permission"
+    tool_name: str = ""
+    reason: str = ""
+    status: str = "pending"
+    requested_at: float = field(default_factory=time.time)
+    decided_at: float | None = None
+    decision: str = ""
+
+    @classmethod
+    def from_row(cls, row: tuple) -> "ApprovalRecord":
+        return cls(
+            approval_id=row[0],
+            session_id=row[1],
+            request_type=row[2],
+            tool_name=row[3] or "",
+            reason=row[4] or "",
+            status=row[5],
+            requested_at=row[6],
+            decided_at=row[7],
+            decision=row[8] or "",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "approval_id": self.approval_id,
+            "session_id": self.session_id,
+            "request_type": self.request_type,
+            "tool_name": self.tool_name,
+            "reason": self.reason,
+            "status": self.status,
+            "requested_at": self.requested_at,
+            "decided_at": self.decided_at,
+            "decision": self.decision,
         }
 
 
@@ -332,6 +384,56 @@ def get_messages(session_id: str, limit: int | None = None) -> list[MessageRecor
         )
         for r in rows
     ]
+
+
+def create_approval(record: ApprovalRecord) -> str:
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO approvals (approval_id, session_id, request_type, tool_name, reason, status, requested_at, decided_at, decision) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            record.approval_id,
+            record.session_id,
+            record.request_type,
+            record.tool_name,
+            record.reason,
+            record.status,
+            record.requested_at,
+            record.decided_at,
+            record.decision,
+        ),
+    )
+    conn.commit()
+    return record.approval_id
+
+
+def update_approval_status(
+    approval_id: str,
+    *,
+    status: str,
+    decision: str = "",
+    decided_at: float | None = None,
+) -> None:
+    conn = get_db()
+    conn.execute(
+        "UPDATE approvals SET status=?, decision=?, decided_at=? WHERE approval_id=?",
+        (status, decision, decided_at, approval_id),
+    )
+    conn.commit()
+
+
+def list_approvals(session_id: str, status: str | None = None) -> list[ApprovalRecord]:
+    conn = get_db()
+    if status:
+        rows = conn.execute(
+            "SELECT approval_id, session_id, request_type, tool_name, reason, status, requested_at, decided_at, decision FROM approvals WHERE session_id=? AND status=? ORDER BY requested_at ASC",
+            (session_id, status),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT approval_id, session_id, request_type, tool_name, reason, status, requested_at, decided_at, decision FROM approvals WHERE session_id=? ORDER BY requested_at ASC",
+            (session_id,),
+        ).fetchall()
+    return [ApprovalRecord.from_row(row) for row in rows]
 
 
 def fork_session(session_id: str) -> str | None:
