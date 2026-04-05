@@ -19,15 +19,15 @@ import time
 _PROTO_VERSION = "1"
 
 def _setup_openharness_path():
-    repo_root = Path(__file__).resolve().parents[4]
-    vendor_src = repo_root / "vendor" / "OpenHarness" / "src"
+    repo_root = Path(os.environ.get("OPENHARNESS_REPO_ROOT") or Path(__file__).resolve().parents[4])
+    vendor_src = Path(os.environ.get("OPENHARNESS_VENDOR_SRC") or (repo_root / "vendor" / "OpenHarness" / "src"))
     if vendor_src.exists():
         src = str(vendor_src)
         if src not in sys.path:
             sys.path.insert(0, src)
 
-    config_dir = repo_root / ".tmp" / "openharness-config"
-    data_dir = repo_root / ".tmp" / "openharness-data"
+    config_dir = Path(os.environ.get("OPENHARNESS_CONFIG_DIR") or (repo_root / ".tmp" / "openharness-config"))
+    data_dir = Path(os.environ.get("OPENHARNESS_DATA_DIR") or (repo_root / ".tmp" / "openharness-data"))
     config_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("OPENHARNESS_CONFIG_DIR", str(config_dir))

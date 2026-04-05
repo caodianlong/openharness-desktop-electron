@@ -5,4 +5,7 @@ __pycache__/
 node_modules/
 dist/
 build/
+release/
+*.tsbuildinfo
+out/
 .DS_Store

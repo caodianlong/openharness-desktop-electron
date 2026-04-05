@@ -1,0 +1,21 @@
+{
+  "name": "openharness-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenHarness Desktop Electron shell",
+  "main": "main.js",
+  "author": "OpenHarness",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --config electron-builder.yml",
+    "pack": "electron-builder --dir --config electron-builder.yml"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "extends": null
+  }
+}

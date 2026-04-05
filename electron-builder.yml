@@ -1,0 +1,24 @@
+appId: com.openharness.desktop
+productName: OpenHarness Desktop
+directories:
+  output: dist
+files:
+  - main.js
+  - preload.js
+  - start-host.sh
+  - package.json
+extraResources:
+  - from: apps/host-python
+    to: apps/host-python
+    filter:
+      - '**/*'
+  - from: vendor/OpenHarness
+    to: vendor/OpenHarness
+    filter:
+      - '**/*'
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage
