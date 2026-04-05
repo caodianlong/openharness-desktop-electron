@@ -1045,15 +1045,15 @@ async function switchSession(id) {
 
 async function resumeSession(id) {
   const data = await api(`/sessions/${id}/resume`, { method: 'POST' });
+  const messages = data.messages || [];
   $('#messages').innerHTML = '';
-  if (data.messages && data.messages.length > 0) {
-    data.messages.forEach(m => addMsgToUI(m.role, m.content, m));
-    $('#welcomeArea').classList.add('hidden');
-  } else {
-    renderWelcome();
+  if (messages.length > 0) {
+    messages.forEach(m => addMsgToUI(m.role, m.content, m));
+    $('#welcomeArea')?.remove();
   }
   $('#topbarTitle').textContent = data.session.title || 'New Session';
   updatePermissionBadge(data.session.permission_mode || 'safe');
+  if (messages.length === 0) renderWelcome();
 }
 
 function renderWelcome() {
