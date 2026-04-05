@@ -1,11 +1,11 @@
 {
   "project": "OpenHarness Desktop Electron",
   "created_at": "2026-04-05T11:59:00+08:00",
-  "last_updated": "2026-04-05T11:59:00+08:00",
+  "last_updated": "2026-04-05T12:14:00+08:00",
   "summary": {
     "total": 16,
-    "passing": 6,
-    "failing": 10,
+    "passing": 7,
+    "failing": 9,
     "blocked": 0
   },
   "features": [
@@ -42,12 +42,14 @@
         "不破坏现有消息气泡样式"
       ],
       "priority": "high",
-      "dependencies": ["F001"],
-      "passes": false,
+      "dependencies": [
+        "F001"
+      ],
+      "passes": true,
       "blocked": false,
       "blocked_reason": null,
       "implementation_notes": null,
-      "completed_at": null
+      "completed_at": "2026-04-05T12:14:00+08:00"
     },
     {
       "id": "F003",
@@ -62,7 +64,9 @@
         "hover 高亮 + cursor: pointer"
       ],
       "priority": "high",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -82,7 +86,9 @@
         "Full Auto 模式不弹窗但顶部显示标识"
       ],
       "priority": "high",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -102,7 +108,9 @@
         "未审批事项在切换会话后仍可通过队列查看"
       ],
       "priority": "high",
-      "dependencies": ["F004"],
+      "dependencies": [
+        "F004"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -121,7 +129,9 @@
         "支持按 conversation_id 查询产物"
       ],
       "priority": "medium",
-      "dependencies": ["F004"],
+      "dependencies": [
+        "F004"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -142,7 +152,9 @@
         "预览器有返回按钮"
       ],
       "priority": "medium",
-      "dependencies": ["F006"],
+      "dependencies": [
+        "F006"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -162,7 +174,9 @@
         "支持导出 Markdown/JSON"
       ],
       "priority": "medium",
-      "dependencies": ["F002"],
+      "dependencies": [
+        "F002"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -182,7 +196,9 @@
         "恢复后 UI 可正常发送新消息"
       ],
       "priority": "high",
-      "dependencies": ["F005"],
+      "dependencies": [
+        "F005"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -202,7 +218,9 @@
         "可查看/导出 Host 日志"
       ],
       "priority": "medium",
-      "dependencies": ["F004"],
+      "dependencies": [
+        "F004"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -222,7 +240,9 @@
         "GET /api/sessions/{id}/runs 返回 Run 列表"
       ],
       "priority": "medium",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -242,7 +262,9 @@
         "文件与 session 关联记录可追溯"
       ],
       "priority": "medium",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -300,7 +322,9 @@
         "开发模式下仍可用当前架构"
       ],
       "priority": "high",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
@@ -320,7 +344,9 @@
         "macOS/Linux/Windows 至少一种平台打包成功"
       ],
       "priority": "high",
-      "dependencies": ["F015"],
+      "dependencies": [
+        "F015"
+      ],
       "passes": false,
       "blocked": false,
       "blocked_reason": null,
