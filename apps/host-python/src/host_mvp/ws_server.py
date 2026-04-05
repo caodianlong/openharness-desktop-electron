@@ -780,9 +780,9 @@ async def update_session_title(session_id: str, body: dict):
 @app.put("/api/sessions/{session_id}/permission")
 async def update_permission_mode(session_id: str, body: dict):
     """切换会话权限模式（safe/balanced/full_auto）。"""
-    mode = body.get("mode", "")
+    mode = body.get("mode", "") or body.get("permission_mode", "")
     if not mode:
-        return {"error": "mode is required"}, 400
+        return {"error": "mode or permission_mode is required"}, 400
     s = SessionManager.get(session_id)
     if s:
         result = await s.set_permission_mode(mode)

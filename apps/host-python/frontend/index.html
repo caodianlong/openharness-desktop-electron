@@ -1331,6 +1331,11 @@ $('#menuToggle').onclick = () => {
   $('#sidebar').classList.toggle('collapsed');
 };
 
+// New Session
+$('#newSessionBtn').onclick = () => {
+  createNewSession();
+};
+
 // Approvals UI
 function showApprovalModal(requestId, tool, reason) {
   $('#approvalModalBody').innerHTML = `Agent wants to use <strong>${esc(tool)}</strong>.<br><br>Reason: ${esc(reason)}`;
