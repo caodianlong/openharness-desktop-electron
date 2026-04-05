@@ -262,12 +262,15 @@ def create_session(
     )
     conn = get_db()
     conn.execute(
-        "INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO sessions (session_id, title, status, cwd, model, message_count, "
+        "usage_input, usage_output, snapshot_path, created_at, updated_at, permission_mode, was_running_runtime) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             meta.session_id, meta.title, meta.status,
             meta.cwd, meta.model, meta.message_count,
             meta.usage_input, meta.usage_output,
             meta.snapshot_path, meta.created_at, meta.updated_at,
+            'full_auto', 0,
         ),
     )
     conn.commit()
