@@ -102,6 +102,63 @@ RUNTIME_PERMISSION_MODE = "safe"
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 
+def _ensure_recovery_column() -> None:
+    conn = session_store.get_db()
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+    if "was_running_runtime" not in columns:
+        conn.execute("ALTER TABLE sessions ADD COLUMN was_running_runtime INTEGER DEFAULT 0")
+        conn.commit()
+
+
+def _set_runtime_recovery_flag(session_id: str, value: int) -> None:
+    conn = session_store.get_db()
+    conn.execute(
+        "UPDATE sessions SET was_running_runtime=?, updated_at=? WHERE session_id=?",
+        (1 if value else 0, time.time(), session_id),
+    )
+    conn.commit()
+
+
+def _get_runtime_recovery_flag(session_id: str) -> int:
+    conn = session_store.get_db()
+    row = conn.execute(
+        "SELECT was_running_runtime FROM sessions WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def _list_recovery_sessions() -> list[dict[str, Any]]:
+    conn = session_store.get_db()
+    rows = conn.execute(
+        """
+        SELECT session_id, title, status, model, message_count, created_at, updated_at, was_running_runtime
+        FROM sessions
+        WHERE was_running_runtime=1
+        ORDER BY updated_at DESC
+        """
+    ).fetchall()
+    return [
+        {
+            "session_id": row[0],
+            "title": row[1],
+            "status": row[2],
+            "model": row[3],
+            "message_count": row[4],
+            "created_at": row[5],
+            "updated_at": row[6],
+            "was_running_runtime": int(row[7] or 0),
+        }
+        for row in rows
+    ]
+
+
+_ensure_recovery_column()
+
+
 def _normalize_permission_mode(mode: str | None) -> str:
     normalized = (mode or "").strip().lower().replace("-", "_").replace(" ", "_")
     aliases = {
@@ -349,6 +406,7 @@ class AgentSession:
         if self._closed:
             return
         self._closed = True
+        _set_runtime_recovery_flag(self._db_session_id, 0)
 
         # 自动生成标题（如果还没有）
         auto_generate_title(self._db_session_id)
@@ -590,12 +648,22 @@ async def list_sessions_db(limit: int = 50):
                 "status": s.status,
                 "model": s.model,
                 "permission_mode": getattr(s, 'permission_mode', 'full_auto') or 'full_auto',
+                "was_running_runtime": _get_runtime_recovery_flag(s.session_id),
                 "message_count": s.message_count,
                 "created_at": s.created_at,
                 "updated_at": s.updated_at,
             }
             for s in sessions
         ],
+    }
+
+
+@app.get("/api/recovery")
+async def get_recovery_sessions():
+    sessions = _list_recovery_sessions()
+    return {
+        "sessions": sessions,
+        "latest": sessions[0] if sessions else None,
     }
 
 
@@ -613,6 +681,7 @@ async def get_session(session_id: str, limit: int = 200):
             "title": meta.title,
             "status": meta.status,
             "model": meta.model,
+            "was_running_runtime": _get_runtime_recovery_flag(meta.session_id),
             "message_count": meta.message_count,
             "created_at": meta.created_at,
             "updated_at": meta.updated_at,
@@ -648,14 +717,18 @@ async def resume_session(session_id: str):
             msg_dict["is_error"] = m.is_error
         messages_raw.append(msg_dict)
 
-    # 更新状态
+    # 更新状态，并在恢复成功后清除异常中断标记
     db_update_session(session_id, status="active")
+    was_running_runtime = _get_runtime_recovery_flag(session_id)
+    if was_running_runtime:
+        _set_runtime_recovery_flag(session_id, 0)
 
     return {
         "session": {
             "session_id": meta.session_id,
             "title": meta.title,
             "model": meta.model,
+            "was_running_runtime": was_running_runtime,
             "message_count": meta.message_count,
             "ws_url": f"/ws/{session_id}",
         },
@@ -838,6 +911,7 @@ async def preview_artifact(artifact_id: str):
 @app.websocket("/ws/{session_id}")
 async def ws_endpoint(ws: WebSocket, session_id: str):
     await ws.accept()
+    normal_shutdown = False
 
     # 获取或创建会话
     s = SessionManager.get(session_id)
@@ -891,6 +965,7 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
                 await s.handle_question_response(p.get("request_id"), p.get("answer", ""))
 
             elif t == "session.shutdown":
+                normal_shutdown = True
                 break
 
             else:
@@ -905,7 +980,10 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
         pass
     finally:
         if s:
+            interrupted_while_busy = (not normal_shutdown and s.busy)
             await s.shutdown()
+            if interrupted_while_busy:
+                _set_runtime_recovery_flag(s._db_session_id, 1)
             SessionManager.remove(session_id)
 
 

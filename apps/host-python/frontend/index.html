@@ -378,6 +378,44 @@
     font-size: 10px;
     font-weight: 500;
   }
+  .recovery-banner {
+    margin: 12px 16px 0;
+    padding: 12px 16px;
+    border: 1px solid rgba(251,191,36,.28);
+    border-radius: 12px;
+    background: linear-gradient(90deg, rgba(251,191,36,.18), rgba(124,106,255,.12));
+    color: #fde68a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 14px 36px rgba(0,0,0,.18);
+  }
+  .recovery-banner strong {
+    color: #fff7d6;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .recovery-banner span {
+    font-size: 12px;
+    color: rgba(255,247,214,.8);
+  }
+  .recovery-banner button {
+    border: none;
+    border-radius: 999px;
+    padding: 9px 16px;
+    background: #fbbf24;
+    color: #2b1900;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .recovery-banner button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+  }
   .badge.connected { background: var(--green-dim); color: var(--green); }
   .badge.disconnected { background: var(--red-dim); color: var(--red); }
   .badge.permission-mode {
@@ -1389,6 +1427,14 @@
     </div>
   </div>
 
+  <div id="recoveryBanner" class="recovery-banner hidden">
+    <div>
+      <strong>有未完成的会话，点击恢复</strong>
+      <span id="recoveryBannerText">检测到上次异常中断的会话。</span>
+    </div>
+    <button id="recoveryBannerBtn" type="button">恢复最近会话</button>
+  </div>
+
   <div class="main-body">
     <div class="conversation-shell">
       <!-- Messages -->
@@ -1484,6 +1530,9 @@ const typingEl      = $('#typing');
 const typingText    = $('#typingText');
 const statusText    = $('#statusText');
 const connBadge     = $('#connBadge');
+const recoveryBanner = $('#recoveryBanner');
+const recoveryBannerText = $('#recoveryBannerText');
+const recoveryBannerBtn = $('#recoveryBannerBtn');
 const topbarTitle   = $('#topbarTitle');
 const sessionList   = $('#sessionList');
 const searchInput   = $('#searchInput');
@@ -1614,6 +1663,7 @@ let selectedArtifactId = null;
 let toastTimer = null;
 let pendingAttachments = [];
 let dragDepth = 0;
+let recoverySessions = [];
 
 const PERMISSION_MODE_META = {
   safe: { label: '🔒 Safe', className: 'permission-safe', status: '安全模式' },
@@ -2511,6 +2561,29 @@ function updateApprovalBadge() {
   approvalBadge.classList.toggle('hidden', count === 0);
 }
 
+function renderRecoveryBanner() {
+  const latest = recoverySessions[0];
+  if (!latest) {
+    recoveryBanner.classList.add('hidden');
+    return;
+  }
+  const title = latest.title || latest.session_id;
+  recoveryBannerText.textContent = `最近中断：${title} · ${latest.message_count || 0} 条消息`;
+  recoveryBanner.classList.remove('hidden');
+}
+
+async function loadRecoverySessions() {
+  try {
+    const data = await api('/recovery');
+    recoverySessions = data.sessions || [];
+    renderRecoveryBanner();
+  } catch (e) {
+    console.warn('加载恢复会话失败:', e);
+    recoverySessions = [];
+    renderRecoveryBanner();
+  }
+}
+
 function removePendingApproval(approvalId) {
   pendingApprovals = pendingApprovals.filter(item => item.approval_id !== approvalId);
   document.querySelectorAll(`.approval-modal[data-approval-id="${approvalId}"]`).forEach(el => el.remove());
@@ -2686,11 +2759,14 @@ async function resumeSession(id) {
     connect();
     await loadPendingApprovals(id);
     await loadArtifacts(id);
+    recoverySessions = recoverySessions.filter(item => item.session_id !== id);
+    renderRecoveryBanner();
     
     // 更新 topbar
     topbarTitle.textContent = data.session.title || '新对话';
     msgCountInfo.textContent = `${data.session.message_count} 条消息`;
-    loadSessions();
+    await loadSessions();
+    await loadRecoverySessions();
   } catch (e) {
     console.error('恢复会话失败:', e);
     addMsg('error', '恢复会话失败: ' + e.message);
@@ -3159,6 +3235,16 @@ artifactList.addEventListener('click', (e) => {
 previewClose.addEventListener('click', closePreviewPanel);
 
 exportSessionBtn.addEventListener('click', exportCurrentSession);
+recoveryBannerBtn.addEventListener('click', async () => {
+  const latest = recoverySessions[0];
+  if (!latest) return;
+  recoveryBannerBtn.disabled = true;
+  try {
+    await resumeSession(latest.session_id);
+  } finally {
+    recoveryBannerBtn.disabled = false;
+  }
+});
 
 // ═══════════════════════════════════════════════════════
 // 侧边栏
@@ -3180,9 +3266,13 @@ async function init() {
   ensureSettingsUI();
   await loadAppSettings();
   await loadSessions();
+  await loadRecoverySessions();
   
-  // 如果有历史会话，恢复最后一个活跃的
-  const lastActive = sessions.find(s => s.status === 'active') || sessions[0];
+  const interruptedIds = new Set(recoverySessions.map(s => s.session_id));
+  const resumableSessions = sessions.filter(s => !interruptedIds.has(s.session_id));
+
+  // 如果有历史会话，恢复最后一个非异常中断的活跃会话
+  const lastActive = resumableSessions.find(s => s.status === 'active') || resumableSessions[0];
   if (lastActive) {
     await switchSession(lastActive.session_id);
   } else {
