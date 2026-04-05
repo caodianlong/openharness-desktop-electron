@@ -25,7 +25,7 @@
     --amber: #fbbf24;
     --cyan: #22d3ee;
     --radius: 12px;
-    --sidebar-w: 260px;
+    --sidebar-w: 244px;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   }
@@ -57,22 +57,21 @@
     width: 60px;
   }
   .sidebar-header {
-    padding: 20px 16px;
+    padding: 16px 14px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 70px;
+    height: 56px;
   }
   .sidebar.collapsed .sidebar-header h2,
-  .sidebar.collapsed .sidebar-header #newSessionBtn span {
+  .sidebar.collapsed .sidebar-header #newSessionBtn span,
+  .sidebar.collapsed .sidebar-footer-btn span {
     display: none;
   }
   .sidebar-header h2 {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
   }
   #newSessionBtn {
     background: transparent;
@@ -84,7 +83,7 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     transition: all 0.2s;
   }
   #newSessionBtn:hover {
@@ -106,10 +105,10 @@
     width: 100%;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 6px;
+    padding: 6px 10px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 12px;
     outline: none;
     transition: border-color 0.2s;
   }
@@ -118,7 +117,7 @@
   .sidebar-list {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 4px;
   }
   .sidebar.collapsed .sidebar-list {
     padding: 8px 4px;
@@ -127,12 +126,12 @@
   .sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
   .session-item {
-    padding: 10px 12px;
+    padding: 8px 10px;
     cursor: pointer;
-    border-radius: 8px;
-    transition: background 0.2s;
+    border-radius: 6px;
+    transition: background 0.15s;
     position: relative;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
   .session-item:hover { background: var(--surface); }
   .session-item.active { background: var(--surface); }
@@ -180,34 +179,40 @@
   .action-btn:hover { color: var(--text); background: rgba(255,255,255,0.1); }
 
   .sidebar-footer {
-    padding: 16px;
+    padding: 8px 10px;
     border-top: 1px solid var(--border);
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    gap: 4px;
+    align-items: center;
   }
   .sidebar.collapsed .sidebar-footer {
     padding: 16px 4px;
     align-items: center;
   }
   .sidebar-footer-btn {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    flex: 1;
+    padding: 8px 4px;
+    border: none;
+    border-radius: 6px;
     background: transparent;
     color: var(--text-dim);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 14px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    transition: all 0.2s;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s;
   }
   .sidebar-footer-btn:hover {
     background: var(--surface);
     color: var(--text);
-    border-color: var(--text-dim);
+  }
+  .count-badge {
+    font-size: 11px;
+    min-width: 16px;
+    text-align: center;
   }
   .sidebar.collapsed .sidebar-footer-btn span {
     display: none;
@@ -223,12 +228,12 @@
     background: var(--bg);
   }
   .topbar {
-    height: 70px;
+    height: 56px;
     display: flex;
     align-items: center;
-    padding: 0 24px;
+    padding: 0 20px;
     border-bottom: 1px solid var(--border);
-    gap: 16px;
+    gap: 12px;
   }
   .menu-toggle {
     background: transparent;
@@ -240,8 +245,8 @@
     align-items: center;
   }
   .topbar h1 {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 500;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -250,24 +255,52 @@
   .topbar-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 4px;
   }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .status-dot.online { background: var(--green); }
+  .status-dot.offline { background: var(--text-dim); }
   .badge {
-    padding: 4px 10px;
-    border-radius: 6px;
+    padding: 3px 8px;
+    border-radius: 20px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 400;
     border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
-  .badge.connected { background: rgba(74, 222, 128, 0.1); color: var(--green); border-color: rgba(74, 222, 128, 0.2); }
-  .badge.disconnected { background: rgba(248, 113, 113, 0.1); color: var(--red); border-color: rgba(248, 113, 113, 0.2); }
+  .badge.connected {
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+  .badge.disconnected {
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    opacity: 0.5;
+  }
   .badge.permission {
     cursor: pointer;
-    transition: all 0.2s;
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.7;
   }
-  .badge.permission-safe { background: rgba(74, 222, 128, 0.1); color: var(--green); border-color: rgba(74, 222, 128, 0.2); }
-  .badge.permission-balanced { background: rgba(251, 191, 36, 0.1); color: var(--amber); border-color: rgba(251, 191, 36, 0.2); }
-  .badge.permission-full_auto { background: rgba(248, 113, 113, 0.1); color: var(--red); border-color: rgba(248, 113, 113, 0.2); }
+  .badge.permission-safe { color: var(--green); }
+  .badge.permission-balanced { color: var(--amber); }
+  .badge.permission-full_auto { color: var(--red); }
 
   .recovery-banner {
     background: rgba(251, 191, 36, 0.1);
@@ -295,12 +328,12 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 0;
+    padding: 40px 0;
   }
   .chat-content {
     width: 100%;
     max-width: 720px;
-    padding: 0 24px;
+    padding: 0 32px;
     display: flex;
     flex-direction: column;
     gap: 32px;
@@ -425,22 +458,22 @@
   .input-outer {
     width: 100%;
     max-width: 720px;
-    padding: 0 24px 24px;
+    padding: 0 24px 32px;
     margin: 0 auto;
     position: sticky;
     bottom: 0;
-    background: linear-gradient(to top, var(--bg) 80%, transparent);
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
   }
   .input-container {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 12px;
+    border-radius: 22px;
+    padding: 10px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    transition: border-color 0.2s;
+    gap: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
   .input-container:focus-within { border-color: var(--text-dim); }
 
@@ -482,15 +515,16 @@
     font-size: 15px;
     resize: none;
     outline: none;
-    padding: 8px 4px;
-    min-height: 40px;
+    padding: 6px 4px;
+    min-height: 36px;
     max-height: 200px;
     line-height: 1.5;
   }
   .input-actions {
     display: flex;
-    gap: 8px;
-    padding-bottom: 4px;
+    gap: 2px;
+    padding-bottom: 2px;
+    align-items: center;
   }
   .icon-btn {
     width: 32px; height: 32px;
@@ -502,20 +536,21 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all 0.15s;
+    font-size: 14px;
+    flex-shrink: 0;
   }
-  .icon-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .icon-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
   #sendBtn {
-    background: transparent;
-    color: var(--text-dim);
-  }
-  #sendBtn.active {
+    display: none;
     background: var(--text);
     color: var(--bg);
   }
-  #sendBtn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
-  #sendBtn.active:hover { background: rgba(255,255,255,0.85); }
-  #sendBtn:disabled { opacity: 0.3; cursor: not-allowed; background: transparent; }
+  #sendBtn.active {
+    display: flex;
+  }
+  #sendBtn:hover { background: rgba(255,255,255,0.85); }
+  #sendBtn:disabled { opacity: 0.3; cursor: not-allowed; background: var(--text-dim); color: var(--bg); }
   #stopBtn { color: var(--red); }
 
   /* ── Slash Popup ── */
@@ -709,13 +744,13 @@
   </div>
   <div class="sidebar-footer">
     <button id="artifactPanelBtn" class="sidebar-footer-btn" title="Artifacts">
-      <span>Artifacts</span><span id="artifactCount" class="count-badge">0</span>
+      <span>📁</span><span id="artifactCount">0</span>
     </button>
     <button id="approvalQueueBtn" class="sidebar-footer-btn" title="Approvals">
-      <span>Approvals</span><span id="approvalBadge" class="count-badge">0</span>
+      <span>✓</span><span id="approvalBadge">0</span>
     </button>
     <button id="settingsBtn" class="sidebar-footer-btn" title="Settings">
-      <span>Settings</span><span>⚙</span>
+      <span>⚙</span>
     </button>
   </div>
 </aside>
@@ -725,8 +760,9 @@
     <button id="menuToggle" class="menu-toggle" title="Toggle Sidebar">☰</button>
     <h1 id="topbarTitle">OpenHarness</h1>
     <div class="topbar-info">
-      <span id="connBadge" class="badge disconnected">Offline</span>
+      <span id="connBadge" class="badge disconnected"><span class="status-dot offline"></span>Offline</span>
       <span id="permissionBadge" class="badge permission permission-safe">Safe</span>
+    </div>
     </div>
   </header>
 
@@ -1037,13 +1073,13 @@ function connect() {
   ws = new WebSocket(`${WS_BASE}/ws/${sessionId}`);
   ws.onopen = () => {
     $('#connBadge').className = 'badge connected';
-    $('#connBadge').textContent = 'Online';
+    $('#connBadge').innerHTML = '<span class="status-dot online"></span>Online';
     setBusy(false);
   };
   ws.onmessage = (e) => handleWsEvent(JSON.parse(e.data));
   ws.onclose = () => {
     $('#connBadge').className = 'badge disconnected';
-    $('#connBadge').textContent = 'Offline';
+    $('#connBadge').innerHTML = '<span class="status-dot offline"></span>Offline';
     setBusy(false);
   };
 }
