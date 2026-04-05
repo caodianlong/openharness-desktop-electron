@@ -170,6 +170,23 @@
     color: var(--text-dim);
     text-align: center;
   }
+  .sidebar-secondary-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .sidebar-secondary-btn:hover {
+    background: var(--surface3);
+    border-color: rgba(124,106,255,.35);
+    transform: translateY(-1px);
+  }
   .sidebar-footer-actions {
     padding: 10px 14px 0;
     border-top: 1px solid var(--border);
@@ -425,6 +442,39 @@
     animation: fadeIn .2s ease;
     word-wrap: break-word;
   }
+  .copyable {
+    position: relative;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255,255,255,.08);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .15s ease, transform .15s ease, background .15s ease;
+    backdrop-filter: blur(8px);
+    z-index: 2;
+  }
+  .copyable:hover .copy-btn,
+  .copy-btn:focus-visible {
+    opacity: 1;
+  }
+  .copy-btn:hover {
+    background: rgba(124,106,255,.28);
+    transform: scale(1.04);
+  }
+  .msg.assistant.has-copy {
+    padding-right: 46px;
+  }
   @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
   .msg.assistant { align-self: flex-start; background: var(--surface2); word-break: break-word; }
@@ -510,6 +560,13 @@
     line-height: 1.5;
     white-space: pre-wrap;
     color: var(--text-dim);
+  }
+  .tool-card .body.copyable {
+    padding-right: 46px;
+  }
+  .tool-card .body.copyable .copy-btn {
+    top: 10px;
+    right: 10px;
   }
   .tool-card .summary {
     padding: 6px 14px;
@@ -917,6 +974,26 @@
     filter: brightness(1.08);
     box-shadow: 0 10px 22px rgba(0,0,0,.18);
   }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%) translateY(10px);
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: #7c6aff;
+    color: #fff;
+    font-size: 13px;
+    box-shadow: 0 14px 36px rgba(124,106,255,.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 400;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 </style>
 </head>
 <body>
@@ -948,6 +1025,7 @@
       <span>待审批</span>
       <span id="approvalBadge" class="approval-badge hidden">0</span>
     </button>
+    <button id="exportSessionBtn" class="sidebar-secondary-btn" title="导出当前会话为 Markdown">导出会话</button>
   </div>
   <div class="sidebar-footer">OpenHarness Desktop MVP</div>
 </aside>
@@ -1015,6 +1093,8 @@
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // 配置
@@ -1056,6 +1136,8 @@ const artifactPanelToggle = $('#artifactPanelToggle');
 const artifactPanel = $('#artifactPanel');
 const artifactList = $('#artifactList');
 const artifactCount = $('#artifactCount');
+const exportSessionBtn = $('#exportSessionBtn');
+const toastEl = $('#toast');
 
 const SLASH_COMMANDS = [
   { command: '/help', description: '显示可用命令列表' },
@@ -1138,6 +1220,7 @@ let currentPermissionMode = 'safe';
 let pendingApprovals = [];
 let artifacts = [];
 let selectedArtifactId = null;
+let toastTimer = null;
 
 const PERMISSION_MODE_META = {
   safe: { label: '🔒 Safe', className: 'permission-safe', status: '安全模式' },
@@ -1328,12 +1411,51 @@ function summarizeArtifactContent(content) {
   return normalized.length > 80 ? `${normalized.slice(0, 80)}…` : normalized;
 }
 
+function showToast(message) {
+  if (!toastEl) return;
+  toastEl.textContent = message;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastEl.classList.remove('show');
+  }, 2000);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text || '');
+    showToast('已复制到剪贴板');
+  } catch (err) {
+    console.error('复制失败:', err);
+    addMsg('error', '复制失败: 无法写入剪贴板');
+  }
+}
+
+function attachCopyButton(container, getText) {
+  if (!container || container.querySelector(':scope > .copy-btn')) return;
+  container.classList.add('copyable');
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.type = 'button';
+  btn.title = '复制';
+  btn.setAttribute('aria-label', '复制');
+  btn.textContent = '📋';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyText(typeof getText === 'function' ? getText() : '');
+  });
+  container.appendChild(btn);
+}
+
 function addMsg(role, content) {
   hideWelcome();
   const div = document.createElement('div');
   div.className = `msg ${role}`;
   if (role === 'assistant') {
     div.innerHTML = renderMd(content);
+    div.dataset.rawContent = content || '';
+    div.classList.add('has-copy');
+    attachCopyButton(div, () => div.dataset.rawContent || div.textContent || '');
   } else {
     div.textContent = content;
   }
@@ -1397,6 +1519,7 @@ function createToolCard(toolName, input) {
   const card = document.createElement('div');
   card.className = 'tool-card';
   card.dataset.toolIdx = toolCounter;
+  card.dataset.toolName = toolName || '';
 
   const header = document.createElement('div');
   header.className = 'tool-header running';
@@ -1406,6 +1529,8 @@ function createToolCard(toolName, input) {
   body.className = 'body';
   body.style.color = 'var(--text-dim)';
   body.textContent = '等待结果...';
+  body.dataset.copyText = '等待结果...';
+  attachCopyButton(body, () => body.dataset.copyText || body.textContent || '');
 
   card.appendChild(header);
   card.appendChild(body);
@@ -1451,10 +1576,89 @@ function updateToolCard(cardEl, output, isError) {
   }
 
   if (output !== undefined && output !== null) {
-    body.textContent = output;
+    const text = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+    body.textContent = text;
+    body.dataset.copyText = text;
   }
   if (activeToolCard === cardEl) activeToolCard = null;
   scrollBottom();
+}
+
+function padNumber(n) {
+  return String(n).padStart(2, '0');
+}
+
+function formatExportTimestamp(date = new Date()) {
+  return `${date.getFullYear()}${padNumber(date.getMonth() + 1)}${padNumber(date.getDate())}-${padNumber(date.getHours())}${padNumber(date.getMinutes())}${padNumber(date.getSeconds())}`;
+}
+
+function sanitizeFilenamePart(value) {
+  return (value || 'session')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'session';
+}
+
+function formatMarkdownBlock(content) {
+  if (!content) return '_空内容_';
+  return String(content).replace(/\r\n/g, '\n').trim() || '_空内容_';
+}
+
+function sessionToMarkdown(session, messages = []) {
+  const lines = [`# ${session?.title || '未命名会话'}`, ''];
+  messages.forEach((msg, index) => {
+    const role = msg.role;
+    if (role === 'user') {
+      lines.push(`## 用户 ${index + 1}`, '', formatMarkdownBlock(msg.content), '');
+      return;
+    }
+    if (role === 'assistant') {
+      lines.push(`## AI ${index + 1}`, '', formatMarkdownBlock(msg.content), '');
+      return;
+    }
+    if (role === 'tool' || role === 'tool_result') {
+      const toolName = msg.tool_name || '未知工具';
+      lines.push(`## 工具 ${index + 1} · ${toolName}`, '');
+      if (msg.tool_input) {
+        lines.push('### 输入', '', '```json', JSON.stringify(msg.tool_input, null, 2), '```', '');
+      }
+      const output = msg.content ?? msg.tool_output ?? '';
+      lines.push('### 输出', '', '```', String(output), '```', '');
+      return;
+    }
+    if (role === 'system') {
+      lines.push(`## 系统 ${index + 1}`, '', formatMarkdownBlock(msg.content), '');
+    }
+  });
+  return lines.join('\n');
+}
+
+async function exportCurrentSession() {
+  if (!currentSessionId) {
+    addMsg('error', '暂无可导出的会话');
+    return;
+  }
+  try {
+    const data = await api(`/sessions/${currentSessionId}/resume`, { method: 'POST' });
+    const session = data.session || sessions.find(s => s.session_id === currentSessionId) || {};
+    const markdown = sessionToMarkdown(session, data.messages || []);
+    const fileName = `${sanitizeFilenamePart(session.title || topbarTitle.textContent || 'session')}-${formatExportTimestamp()}.md`;
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('会话已导出');
+  } catch (e) {
+    console.error('导出会话失败:', e);
+    addMsg('error', '导出会话失败: ' + e.message);
+  }
 }
 
 function formatTime(ts) {
@@ -1800,11 +2004,14 @@ function handleEvent(data) {
       setTyping('思考中');
       if (!window._assistantMsg) {
         window._assistantMsg = document.createElement('div');
-        window._assistantMsg.className = 'msg assistant cursor';
+        window._assistantMsg.className = 'msg assistant cursor has-copy';
         window._assistantMsg.textContent = '';
+        window._assistantMsg.dataset.rawContent = '';
+        attachCopyButton(window._assistantMsg, () => window._assistantMsg?.dataset.rawContent || '');
         messagesEl.appendChild(window._assistantMsg);
       }
       window._assistantMsg._rawText = (window._assistantMsg._rawText || '') + (payload.text || '');
+      window._assistantMsg.dataset.rawContent = window._assistantMsg._rawText;
       window._assistantMsg.textContent += (payload.text || '');
       scrollBottom();
       break;
@@ -1817,6 +2024,8 @@ function handleEvent(data) {
         const raw = window._assistantMsg._rawText;
         if (raw && raw.trim()) {
           window._assistantMsg.innerHTML = renderMd(raw);
+          window._assistantMsg.dataset.rawContent = raw;
+          attachCopyButton(window._assistantMsg, () => window._assistantMsg?.dataset.rawContent || '');
         }
         window._assistantMsg = null;
       }
@@ -2046,6 +2255,8 @@ artifactList.addEventListener('click', (e) => {
   if (!item) return;
   showArtifact(item.dataset.artifactId);
 });
+
+exportSessionBtn.addEventListener('click', exportCurrentSession);
 
 // ═══════════════════════════════════════════════════════
 // 侧边栏
