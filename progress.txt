@@ -1,0 +1,29 @@
+# 项目进度记录
+项目名称：OpenHarness Desktop Electron
+最后更新：2026-04-05 11:59
+当前状态：进行中
+
+## 总进度
+总任务数：16 | 已完成：6 | 进行中：0 | 阻塞：0
+
+## 最近完成的任务（上一阶段技术验证）
+- [F001] 会话 CRUD + 搜索 + 自动标题 — 已验证
+- WebSocket 实时消息流 — 已验证
+- 工具卡片折叠 — 已验证
+- Slash 命令补全 — 已验证
+- SQLite 持久化 + 历史恢复 — 已验证
+- OpenHarness import 调用 — 已验证
+
+## 当前阻塞项
+- 无
+
+## 技术决策记录
+- 2026-04-05：后端同源 serve 前端（无跨域），端口 8789
+- 2026-04-05：所有 REST 路由 /api/...，WebSocket /ws/{session_id}
+- 2026-04-05：必须用 .venv/bin/python3（websockets 13.1 兼容）
+- 2026-04-05：nohup 启动绕过系统 SIGKILL
+
+## 环境说明
+- 开发服务器：http://127.0.0.1:8789/
+- 测试命令：curl -s http://127.0.0.1:8789/api/health
+- 主要技术栈：Python FastAPI, WebSocket, JavaScript SPA, SQLite
