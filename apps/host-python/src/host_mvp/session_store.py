@@ -91,6 +91,13 @@ def _ensure_db() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(_SCHEMA)
+
+    # Migrate legacy schema: add permission_mode column if missing
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN permission_mode TEXT DEFAULT 'full_auto'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     return conn
 
 
