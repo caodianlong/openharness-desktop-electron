@@ -5,7 +5,6 @@ directories:
 files:
   - main.js
   - preload.js
-  - start-host.sh
   - package.json
 extraResources:
   - from: apps/host-python
@@ -16,6 +15,23 @@ extraResources:
     to: vendor/OpenHarness
     filter:
       - '**/*'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OpenHarness Desktop
+portable:
+  artifactName: ${productName}-${version}-portable-${arch}.${ext}
 mac:
   target:
     - dmg

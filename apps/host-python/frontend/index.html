@@ -886,8 +886,9 @@
 // ═══════════════════════════════════════════════════════
 // Constants & State
 // ═══════════════════════════════════════════════════════
-const API_BASE = '';
-const WS_BASE = window.location.protocol === 'https:' ? 'wss://' + window.location.host : 'ws://' + window.location.host;
+// Use absolute backend URLs since the page is loaded via data:text/html (not http://127.0.0.1:8789)
+const API_BASE = 'http://127.0.0.1:8789';
+const WS_BASE = 'ws://127.0.0.1:8789';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);

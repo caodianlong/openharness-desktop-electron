@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
@@ -34,11 +35,35 @@ function resolvePythonBin() {
   if (process.env.PYTHON_BIN) {
     return process.env.PYTHON_BIN;
   }
+
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Program Files\\Python312\\pythonw.exe',
+      'C:\\Program Files\\Python312\\python.exe',
+      'C:\\Windows\\py.exe',
+    ];
+    const found = candidates.find((candidate) => fs.existsSync(candidate));
+    if (found) {
+      return found;
+    }
+    return 'python';
+  }
+
   return path.join(resolveHostDir(), '.venv', 'bin', 'python3');
 }
 
 function resolveWritableRoot() {
   return app.getPath('userData');
+}
+
+function resolveHostPythonPath(hostDir) {
+  return path.join(hostDir, 'src');
+}
+
+function ensureDirExists(dirPath, label) {
+  if (!fs.existsSync(dirPath)) {
+    throw new Error(`${label} not found: ${dirPath}`);
+  }
 }
 
 function ensureWindow() {
@@ -156,22 +181,32 @@ function startHostProcess() {
     return hostProcess;
   }
 
+  const hostDir = resolveHostDir();
+  const vendorSrc = resolveVendorSrc();
+  const hostPythonPath = resolveHostPythonPath(hostDir);
+  const pythonBin = resolvePythonBin();
+
+  ensureDirExists(hostDir, 'Host directory');
+  ensureDirExists(hostPythonPath, 'Host Python source');
+  if (fs.existsSync(vendorSrc)) {
+    // optional in some builds, but validate when present
+    ensureDirExists(vendorSrc, 'Vendor source');
+  }
+
   const env = {
     ...process.env,
     PORT: String(HOST_PORT),
     HOST: '127.0.0.1',
-    PYTHON_BIN: resolvePythonBin(),
-    HOST_DIR: resolveHostDir(),
+    PYTHON_BIN: pythonBin,
+    HOST_DIR: hostDir,
     OPENHARNESS_REPO_ROOT: resolveAppRoot(),
-    OPENHARNESS_VENDOR_SRC: resolveVendorSrc(),
+    OPENHARNESS_VENDOR_SRC: vendorSrc,
     OPENHARNESS_CONFIG_DIR: path.join(resolveWritableRoot(), 'openharness-config'),
     OPENHARNESS_DATA_DIR: path.join(resolveWritableRoot(), 'openharness-data'),
   };
 
   hostExitExpected = false;
 
-  const pythonBin = resolvePythonBin();
-  const hostDir = resolveHostDir();
   const args = [
     '-m',
     'uvicorn',
@@ -184,13 +219,22 @@ function startHostProcess() {
     'info',
   ];
 
-  hostProcess = spawn(pythonBin, args, {
+  const spawnArgs = pythonBin.toLowerCase().endsWith('py.exe')
+    ? ['-3.12', ...args]
+    : args;
+
+  console.log('[OpenHarness] hostDir =', hostDir);
+  console.log('[OpenHarness] pythonBin =', pythonBin);
+  console.log('[OpenHarness] PYTHONPATH =', hostPythonPath);
+
+  hostProcess = spawn(pythonBin, spawnArgs, {
     cwd: hostDir,
     env: {
       ...env,
-      PYTHONPATH: env.PYTHONPATH || 'src',
+      PYTHONPATH: hostPythonPath,
     },
-    stdio: 'inherit',
+    stdio: process.platform === 'win32' ? 'ignore' : 'inherit',
+    windowsHide: process.platform === 'win32',
     detached: process.platform !== 'win32',
   });
 
